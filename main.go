@@ -98,19 +98,23 @@ func main() {
 			targets = append(targets, target)
 		}
 	}
+	args := make([]string, len(flag.Args()))
+	copy(args, flag.Args())
 	var minify bool
-	switch len(os.Args) {
-	case 3:
-		minify = isMinified(os.Args[2])
-		addTarget(os.Args[1])
+	var target string
+	switch len(args) {
 	case 2:
+		minify = isMinified(args[1])
+		target = args[0]
+		addTarget(target)
+	case 1:
 		switch {
-		case isMinified(os.Args[1]):
+		case isMinified(args[0]):
 			minify = true
 			for _, t := range targetNames {
 				addTarget(t, true)
 			}
-		case os.Args[1] == `genConfig`:
+		case args[0] == `genConfig`:
 			b, err := confl.Marshal(c)
 			if err != nil {
 				com.ExitOnFailure(err.Error(), 1)
@@ -121,20 +125,21 @@ func main() {
 			}
 			com.ExitOnSuccess(`successully generate config file: ` + configFile)
 			return
-		case os.Args[1] == `makeGen`:
+		case args[0] == `makeGen`:
 			makeGenerateCommandComment(c)
 			return
 		default:
-			addTarget(os.Args[1])
+			addTarget(args[0])
 		}
-	case 1:
+	case 0:
 		for _, t := range targetNames {
 			addTarget(t, true)
 		}
 	default:
-		com.ExitOnFailure(`参数错误`)
+		com.ExitOnFailure(`invalid parameter`)
 	}
-	fmt.Println(`WorkDir: `, p.WorkDir)
+	fmt.Println(`ConfFile	:	`, configFile)
+	fmt.Println(`WorkDir		:	`, p.WorkDir)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	err = os.Chdir(p.ProjectPath)
@@ -147,8 +152,11 @@ func main() {
 		p.MinifyFlags = []string{`-s`, `-w`}
 	}
 	distPath := filepath.Join(p.ProjectPath, `dist`)
-	fmt.Println(`DistPath: `, distPath)
+	fmt.Println(`DistPath	:	`, distPath)
 	allTargets := append(targets, armTargets...)
+	if len(target) > 0 && len(allTargets) == 0 {
+		com.ExitOnFailure(`Error		:	 Unsupported target ` + fmt.Sprintf(`%q`, target) + "\n")
+	}
 	fmt.Printf("Building %s for %+v\n", p.Executor, allTargets)
 	for _, target := range allTargets {
 		parts := strings.SplitN(target, `/`, 2)

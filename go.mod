@@ -4,7 +4,7 @@ go 1.21.1
 
 require (
 	github.com/admpub/confl v0.2.4
-	github.com/webx-top/com v0.9.6
+	github.com/webx-top/com v0.9.7
 )
 
 require (
