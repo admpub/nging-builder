@@ -22,6 +22,8 @@ import (
 
 var p = buildParam{}
 
+const version = `v0.0.3`
+
 var c = Config{
 	GoVersion:    `1.20.6`,
 	Executor:     `nging`,
@@ -68,10 +70,17 @@ var targetNames = map[string]string{
 
 var armRegexp = regexp.MustCompile(`/arm`)
 var configFile = `./builder.conf`
+var showVersion bool
 
 func main() {
 	flag.StringVar(&configFile, `conf`, configFile, `--conf `+configFile)
+	flag.BoolVar(&showVersion, `version`, false, `--version`)
 	flag.Parse()
+
+	if showVersion {
+		fmt.Println(version)
+		return
+	}
 
 	configInFile := Config{}
 	_, err := confl.DecodeFile(configFile, &configInFile)
@@ -128,6 +137,9 @@ func main() {
 			return
 		case args[0] == `makeGen`:
 			makeGenerateCommandComment(c)
+			return
+		case args[0] == `version`:
+			fmt.Println(version)
 			return
 		default:
 			addTarget(args[0])
