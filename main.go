@@ -195,6 +195,7 @@ func main() {
 		}
 		execGenerateCommand(ctx, pCopy)
 		execBuildCommand(ctx, pCopy)
+		normalizeExecuteFileName(pCopy, singleFileMode)
 		if !singleFileMode {
 			packFiles(pCopy)
 		}
@@ -362,7 +363,14 @@ func execGitCommitIDCommand(ctx context.Context) string {
 	return string(out)
 }
 
-func packFiles(p buildParam) {
+func normalizeExecuteFileName(p buildParam, singleFileMode bool) {
+	if singleFileMode {
+		if len(p.Extension) > 0 {
+			name := p.Executor + `-` + p.goos + `-` + p.goarch
+			com.Rename(filepath.Join(p.ReleaseDir, name), filepath.Join(p.ReleaseDir, name+p.Extension))
+		}
+		return
+	}
 	files, err := filepath.Glob(filepath.Join(p.ReleaseDir, p.Executor+`-`+p.goos+`*`))
 	if err != nil {
 		com.ExitOnFailure(err.Error(), 1)
@@ -371,6 +379,11 @@ func packFiles(p buildParam) {
 		com.Rename(file, filepath.Join(p.ReleaseDir, p.Executor+p.Extension))
 		break
 	}
+}
+
+func packFiles(p buildParam) {
+	var files []string
+	var err error
 	for _, copyFile := range p.CopyFiles {
 		f := filepath.Join(p.ProjectPath, copyFile)
 		if strings.Contains(f, `*`) {
