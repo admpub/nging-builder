@@ -73,11 +73,12 @@ func main() {
 	flag.StringVar(&configFile, `conf`, configFile, `--conf `+configFile)
 	flag.Parse()
 
-	_, err := confl.DecodeFile(configFile, &c)
+	configInFile := Config{}
+	_, err := confl.DecodeFile(configFile, &configInFile)
 	if err != nil {
 		com.ExitOnFailure(err.Error(), 1)
 	}
-	c.apply()
+	configInFile.apply()
 	p.ProjectPath, err = com.GetSrcPath(p.Project)
 	if err != nil {
 		com.ExitOnFailure(err.Error(), 1)
@@ -422,8 +423,8 @@ func genComment(vendorMiscDirs ...string) string {
 }
 
 func makeGenerateCommandComment(c Config) {
-	dfts := c.VendorMiscDirs[`*`]
-	for osName, miscDirs := range c.VendorMiscDirs {
+	dfts := p.VendorMiscDirs[`*`]
+	for osName, miscDirs := range p.VendorMiscDirs {
 		if osName == `*` {
 			continue
 		}
