@@ -153,12 +153,17 @@ func main() {
 		p.MinifyFlags = []string{`-s`, `-w`}
 	}
 	distPath := filepath.Join(p.ProjectPath, `dist`)
+	err = com.MkdirAll(distPath, os.ModePerm)
+	if err != nil {
+		com.ExitOnFailure(err.Error(), 1)
+	}
 	fmt.Println(`DistPath	:	`, distPath)
 	allTargets := append(targets, armTargets...)
 	if len(target) > 0 && len(allTargets) == 0 {
 		com.ExitOnFailure(`Error		:	 Unsupported target ` + fmt.Sprintf(`%q`, target) + "\n")
 	}
 	fmt.Printf("Building %s for %+v\n", p.Executor, allTargets)
+	singleFileMode := isSingleFile()
 	for _, target := range allTargets {
 		parts := strings.SplitN(target, `/`, 2)
 		if len(parts) != 2 {
@@ -169,7 +174,15 @@ func main() {
 		pCopy.PureGoTags = []string{`osusergo`}
 		osName := parts[0]
 		archName := parts[1]
-		pCopy.ReleaseDir = filepath.Join(distPath, p.Executor+`_`+osName+`_`+archName)
+		if singleFileMode {
+			pCopy.ReleaseDir = distPath
+		} else {
+			pCopy.ReleaseDir = filepath.Join(distPath, p.Executor+`_`+osName+`_`+archName)
+			err = com.MkdirAll(pCopy.ReleaseDir, os.ModePerm)
+			if err != nil {
+				com.ExitOnFailure(err.Error(), 1)
+			}
+		}
 		pCopy.goos = osName
 		pCopy.goarch = archName
 		if osName != `darwin` {
@@ -181,12 +194,10 @@ func main() {
 			pCopy.Extension = `.exe`
 		}
 		execGenerateCommand(ctx, pCopy)
-		err := com.MkdirAll(pCopy.ReleaseDir, os.ModePerm)
-		if err != nil {
-			com.ExitOnFailure(err.Error(), 1)
-		}
 		execBuildCommand(ctx, pCopy)
-		packFiles(pCopy)
+		if !singleFileMode {
+			packFiles(pCopy)
+		}
 	}
 }
 
@@ -204,6 +215,23 @@ func getTarget(target string) string {
 
 func isMinified(arg string) bool {
 	return arg == `m` || arg == `min`
+}
+
+func isSingleFile() bool {
+	isSingle := len(p.CopyFiles) == 0 && len(p.MakeDirs) == 0
+	if !isSingle {
+		return isSingle
+	}
+	isSingle = len(p.VendorMiscDirs) == 0
+	if isSingle {
+		return isSingle
+	}
+	for _, items := range p.VendorMiscDirs {
+		if len(items) > 0 {
+			return false
+		}
+	}
+	return isSingle
 }
 
 type buildParam struct {
