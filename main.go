@@ -75,6 +75,12 @@ var showVersion bool
 func main() {
 	flag.StringVar(&configFile, `conf`, configFile, `--conf `+configFile)
 	flag.BoolVar(&showVersion, `version`, false, `--version`)
+	defaultUsage := flag.Usage
+	flag.Usage = func() {
+		defaultUsage()
+		fmt.Println()
+		fmt.Println(`Command Format:`, os.Args[0], `[os_arch]`, `[min]`)
+	}
 	flag.Parse()
 
 	if showVersion {
