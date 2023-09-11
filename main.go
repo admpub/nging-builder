@@ -81,15 +81,16 @@ func main() {
 		fmt.Println(version)
 		return
 	}
+	isGenConfig := len(flag.Args()) == 1 && com.InSlice(`genConfig`, flag.Args())
 
 	configInFile := Config{}
 	_, err := confl.DecodeFile(configFile, &configInFile)
-	if err != nil {
+	if err != nil && !isGenConfig {
 		com.ExitOnFailure(err.Error(), 1)
 	}
 	configInFile.apply()
 	p.ProjectPath, err = com.GetSrcPath(p.Project)
-	if err != nil {
+	if err != nil && !isGenConfig {
 		com.ExitOnFailure(err.Error(), 1)
 	}
 	p.WorkDir = strings.TrimSuffix(strings.TrimSuffix(p.ProjectPath, `/`), p.Project)
