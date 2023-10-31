@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"time"
 
@@ -274,7 +273,7 @@ func (p buildParam) genLdFlagsString() string {
 	ldflags := []string{}
 	ldflags = append(ldflags, p.MinifyFlags...)
 	ldflags = append(ldflags, p.LdFlags...)
-	return `-X main.BUILD_TIME=` + p.NgingBuildTime + ` -X main.COMMIT=` + p.NgingCommitID + ` -X main.VERSION=` + p.NgingVersion + ` -X main.LABEL=` + p.NgingLabel + ` -X main.BUILD_OS=` + runtime.GOOS + ` -X main.BUILD_ARCH=` + runtime.GOARCH + ` ` + strings.Join(ldflags, ` `)
+	return `-X main.BUILD_TIME=` + p.NgingBuildTime + ` -X main.COMMIT=` + p.NgingCommitID + ` -X main.VERSION=` + p.NgingVersion + ` -X main.LABEL=` + p.NgingLabel + ` -X main.BUILD_OS=` + p.goos + ` -X main.BUILD_ARCH=` + p.goarch + ` ` + strings.Join(ldflags, ` `)
 }
 
 func (p buildParam) genEnvVars() []string {
