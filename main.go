@@ -322,7 +322,7 @@ func execBuildCommand(ctx context.Context, p buildParam) {
 		compiler = `xgo`
 		image := p.GoImage
 		if len(image) == 0 {
-			image = `localhost/crazymax/xgo:` + p.GoVersion
+			image = `admpub/xgo:` + p.GoVersion
 		} else {
 			checkStr := image
 			pos := strings.LastIndex(image, `/`)
@@ -547,6 +547,7 @@ func (a Config) apply() {
 	if len(a.Project) > 0 {
 		p.Project = a.Project
 	}
+	p.GoImage = a.GoImage
 	p.BuildTags = a.BuildTags
 	p.CopyFiles = a.CopyFiles
 	p.MakeDirs = a.MakeDirs
