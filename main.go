@@ -21,18 +21,19 @@ import (
 
 var p = buildParam{}
 
-const version = `v0.0.3`
+const version = `v0.0.4`
 
 var c = Config{
-	GoVersion:    `1.20.6`,
+	GoVersion:    `1.21.4`,
 	Executor:     `nging`,
-	NgingVersion: `5.1.1`,
+	NgingVersion: `5.2.3`,
 	NgingLabel:   `stable`,
 	Project:      `github.com/admpub/nging`,
 	VendorMiscDirs: map[string][]string{
 		`*`: {
 			`vendor/github.com/nging-plugins/caddymanager/template/`,
 			`vendor/github.com/nging-plugins/collector/template/`,
+			`vendor/github.com/nging-plugins/collector/public/assets/`,
 			`vendor/github.com/nging-plugins/dbmanager/template/`,
 			`vendor/github.com/nging-plugins/dbmanager/public/assets/`,
 			`vendor/github.com/nging-plugins/ddnsmanager/template/`,
@@ -333,9 +334,12 @@ func execBuildCommand(ctx context.Context, p buildParam) {
 				image += `:` + p.GoVersion
 			}
 		}
+		if len(p.GoProxy) == 0 {
+			p.GoProxy = `https://goproxy.cn,direct`
+		}
 		args = []string{
 			`-go`, p.GoVersion,
-			`-goproxy`, `https://goproxy.cn,direct`,
+			`-goproxy`, p.GoProxy,
 			`-image`, image,
 			`-targets`, p.Target,
 			`-dest`, p.ReleaseDir,
@@ -466,7 +470,7 @@ func genComment(vendorMiscDirs ...string) string {
 		}
 		if strings.HasPrefix(v, `vendor/`) {
 			parts := strings.SplitN(v, `/`, 5)
-			if len(parts) == 5 {
+			if len(parts) == 5 { // `vendor/github.com/nging-plugins/collector/template/`  `vendor/github.com/nging-plugins/collector/public/`
 				prefix := strings.Join(parts[0:4], `/`) + `/`
 				if _, ok := uniquePrefixes[prefix]; !ok {
 					uniquePrefixes[prefix] = struct{}{}
@@ -519,6 +523,7 @@ func makeGenerateCommandComment(c Config) {
 type Config struct {
 	GoVersion      string
 	GoImage        string
+	GoProxy        string
 	Executor       string
 	NgingVersion   string
 	NgingLabel     string
@@ -552,4 +557,5 @@ func (a Config) apply() {
 	p.MakeDirs = a.MakeDirs
 	p.Compiler = a.Compiler
 	p.CgoEnabled = a.CgoEnabled
+	p.GoProxy = a.GoProxy
 }
