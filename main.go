@@ -21,7 +21,7 @@ import (
 
 var p = buildParam{}
 
-const version = `v0.0.4`
+const version = `v0.0.5`
 
 var c = Config{
 	GoVersion:    `1.21.4`,
@@ -158,6 +158,7 @@ func main() {
 	default:
 		com.ExitOnFailure(`invalid parameter`)
 	}
+	makeGenerateCommandComment(c)
 	fmt.Println(`ConfFile	:	`, configFile)
 	fmt.Println(`WorkDir		:	`, p.WorkDir)
 	ctx, cancel := context.WithCancel(context.Background())
