@@ -21,7 +21,7 @@ import (
 
 var p = buildParam{}
 
-const version = `v0.0.5`
+const version = `v0.2.1`
 
 var c = Config{
 	GoVersion:    `1.21.4`,
@@ -506,6 +506,7 @@ func makeGenerateCommandComment(c Config) {
 		fileContent := "//go:build " + osName + "\n\n"
 		fileContent += "package main\n\n"
 		fileContent += genComment(dirs...) + "\n\n"
+		fmt.Println(`[go:generate]	:	`, filePath)
 		b, err := os.ReadFile(filePath)
 		if err == nil {
 			old := string(b)
@@ -513,6 +514,8 @@ func makeGenerateCommandComment(c Config) {
 			if pos > -1 {
 				fileContent += old[pos:]
 			}
+		} else {
+			fmt.Println(err)
 		}
 		err = os.WriteFile(filePath, []byte(fileContent), os.ModePerm)
 		if err != nil {
@@ -552,6 +555,9 @@ func (a Config) apply() {
 	}
 	if len(a.Project) > 0 {
 		p.Project = a.Project
+	}
+	if len(a.VendorMiscDirs) > 0 {
+		p.VendorMiscDirs = a.VendorMiscDirs
 	}
 	p.GoImage = a.GoImage
 	p.BuildTags = a.BuildTags
