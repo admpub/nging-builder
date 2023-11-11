@@ -71,9 +71,11 @@ var targetNames = map[string]string{
 var armRegexp = regexp.MustCompile(`/arm`)
 var configFile = `./builder.conf`
 var showVersion bool
+var noMisc bool
 
 func main() {
 	flag.StringVar(&configFile, `conf`, configFile, `--conf `+configFile)
+	flag.BoolVar(&noMisc, `nomisc`, noMisc, `--nomisc true`)
 	flag.BoolVar(&showVersion, `version`, false, `--version`)
 	defaultUsage := flag.Usage
 	flag.Usage = func() {
@@ -158,7 +160,9 @@ func main() {
 	default:
 		com.ExitOnFailure(`invalid parameter`)
 	}
-	makeGenerateCommandComment(c)
+	if !noMisc {
+		makeGenerateCommandComment(c)
+	}
 	fmt.Println(`ConfFile	:	`, configFile)
 	fmt.Println(`WorkDir		:	`, p.WorkDir)
 	ctx, cancel := context.WithCancel(context.Background())
