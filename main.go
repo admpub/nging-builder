@@ -462,9 +462,16 @@ func packFiles(p buildParam) {
 func genComment(vendorMiscDirs ...string) string {
 	comment := "//go:generate go install github.com/admpub/bindata/v3/go-bindata@latest\n"
 	comment += `//go:generate go-bindata -fs -o bindata_assetfs.go -ignore "\\.(git|svn|DS_Store|less|scss|gitkeep)$" -minify "\\.(js|css)$" -tags bindata`
-	prefixes := []string{}
 	miscDirs := []string{`public/assets/`, `template/`, `config/i18n/`}
 	miscDirs = append(miscDirs, vendorMiscDirs...)
+	var prefixes []string
+	prefixes, miscDirs = buildGoGenerateCommandData(miscDirs)
+	comment += ` -prefix "` + strings.Join(prefixes, `|`) + `" `
+	comment += strings.Join(miscDirs, ` `)
+	return comment
+}
+
+func buildGoGenerateCommandData(miscDirs []string) (prefixes []string, miscDirsNew []string) {
 	uniquePrefixes := map[string]struct{}{}
 	for k, v := range miscDirs {
 		if !strings.HasSuffix(v, `/...`) {
@@ -482,12 +489,28 @@ func genComment(vendorMiscDirs ...string) string {
 					prefixes = append(prefixes, prefix)
 				}
 			}
+		} else if pos := strings.Index(v, `../`); pos > -1 && len(v) > 3 {
+			cleaned := v[pos+3:]
+			totalPos := 3
+			pos = strings.Index(cleaned, `../`)
+			for pos > -1 && len(cleaned) > 3 {
+				totalPos += 3
+				cleaned = cleaned[pos+3:]
+				pos = strings.Index(cleaned, `../`)
+			}
+			parts := strings.SplitN(cleaned, `/`, 4)
+			if len(parts) == 4 { // `github.com/nging-plugins/collector/template/`  `github.com/nging-plugins/collector/public/`
+				prefix := v[0:totalPos] + strings.Join(parts[0:3], `/`) + `/`
+				if _, ok := uniquePrefixes[prefix]; !ok {
+					uniquePrefixes[prefix] = struct{}{}
+					prefixes = append(prefixes, prefix)
+				}
+			}
 		}
 		miscDirs[k] = v
 	}
-	comment += ` -prefix "` + strings.Join(prefixes, `|`) + `" `
-	comment += strings.Join(miscDirs, ` `)
-	return comment
+	miscDirsNew = miscDirs
+	return
 }
 
 func makeGenerateCommandComment(c Config) {
