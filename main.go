@@ -279,7 +279,17 @@ func (p buildParam) genLdFlagsString() string {
 	ldflags := []string{}
 	ldflags = append(ldflags, p.MinifyFlags...)
 	ldflags = append(ldflags, p.LdFlags...)
-	return `-X main.BUILD_TIME=` + p.NgingBuildTime + ` -X main.COMMIT=` + p.NgingCommitID + ` -X main.VERSION=` + p.NgingVersion + ` -X main.LABEL=` + p.NgingLabel + ` -X main.BUILD_OS=` + p.goos + ` -X main.BUILD_ARCH=` + p.goarch + ` ` + strings.Join(ldflags, ` `)
+	s := `-X main.BUILD_OS=` + p.goos
+	s += ` -X main.BUILD_ARCH=` + p.goarch
+	s += ` -X main.BUILD_TIME=` + p.NgingBuildTime
+	s += ` -X main.COMMIT=` + p.NgingCommitID
+	s += ` -X main.VERSION=` + p.NgingVersion
+	s += ` -X main.LABEL=` + p.NgingLabel
+	if len(p.NgingPackage) > 0 {
+		s += ` -X main.PACKAGE=` + p.NgingPackage
+	}
+	s += ` ` + strings.Join(ldflags, ` `)
+	return s
 }
 
 func (p buildParam) genEnvVars() []string {
@@ -558,6 +568,7 @@ type Config struct {
 	Executor       string
 	NgingVersion   string
 	NgingLabel     string
+	NgingPackage   string
 	Project        string
 	VendorMiscDirs map[string][]string // key: GOOS
 	BuildTags      []string
@@ -580,6 +591,7 @@ func (a Config) apply() {
 	if len(a.NgingLabel) > 0 {
 		p.NgingLabel = a.NgingLabel
 	}
+	p.NgingPackage = a.NgingPackage
 	if len(a.Project) > 0 {
 		p.Project = a.Project
 	}
