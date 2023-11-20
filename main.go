@@ -276,7 +276,7 @@ type buildParam struct {
 }
 
 func (p buildParam) genLdFlagsString() string {
-	ldflags := []string{}
+	ldflags := make([]string, 0, len(p.MinifyFlags)+len(p.LdFlags))
 	ldflags = append(ldflags, p.MinifyFlags...)
 	ldflags = append(ldflags, p.LdFlags...)
 	s := `-X main.BUILD_OS=` + p.goos
