@@ -636,5 +636,5 @@ func makeChecksum(file string) error {
 	}
 
 	sha256Result := hex.EncodeToString(h.Sum(nil))
-	return os.WriteFile(file+`.sha256`, []byte(sha256Result+" "+filepath.Base(file)), 0666)
+	return os.WriteFile(file+`.sha256`, []byte(sha256Result+` `+filepath.Base(file)), 0666)
 }
