@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -402,10 +405,14 @@ func execGitCommitIDCommand(ctx context.Context) string {
 
 func normalizeExecuteFileName(p buildParam, singleFileMode bool) {
 	if singleFileMode {
+		name := p.Executor + `-` + p.goos + `-` + p.goarch
+		finalName := filepath.Join(p.ReleaseDir, name)
 		if len(p.Extension) > 0 {
-			name := p.Executor + `-` + p.goos + `-` + p.goarch
-			com.Rename(filepath.Join(p.ReleaseDir, name), filepath.Join(p.ReleaseDir, name+p.Extension))
+			original := finalName
+			finalName += p.Extension
+			com.Rename(original, finalName)
 		}
+		makeChecksum(finalName)
 		return
 	}
 	files, err := filepath.Glob(filepath.Join(p.ReleaseDir, p.Executor+`-`+p.goos+`*`))
@@ -413,7 +420,9 @@ func normalizeExecuteFileName(p buildParam, singleFileMode bool) {
 		com.ExitOnFailure(err.Error(), 1)
 	}
 	for _, file := range files {
-		com.Rename(file, filepath.Join(p.ReleaseDir, p.Executor+p.Extension))
+		finalName := filepath.Join(p.ReleaseDir, p.Executor+p.Extension)
+		com.Rename(file, finalName)
+		makeChecksum(finalName)
 		break
 	}
 }
@@ -467,6 +476,11 @@ func packFiles(p buildParam) {
 		com.ExitOnFailure(err.Error(), 1)
 	}
 	// 解压: tar -zxvf nging_linux_amd64.tar.gz -C ./nging_linux_amd64
+
+	err = makeChecksum(p.ReleaseDir + `.tar.gz`)
+	if err != nil {
+		com.ExitOnFailure(err.Error(), 1)
+	}
 }
 
 func genComment(vendorMiscDirs ...string) string {
@@ -605,4 +619,22 @@ func (a Config) apply() {
 	p.Compiler = a.Compiler
 	p.CgoEnabled = a.CgoEnabled
 	p.GoProxy = a.GoProxy
+}
+
+func makeChecksum(file string) error {
+	f, err := os.OpenFile(file, os.O_RDONLY, 0666)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	copyBuf := make([]byte, 1024*1024)
+
+	h := sha256.New()
+	_, err = io.CopyBuffer(h, f, copyBuf)
+	if err != nil {
+		return err
+	}
+
+	sha256Result := hex.EncodeToString(h.Sum(nil))
+	return os.WriteFile(file+`.sha256`, []byte(sha256Result+" "+filepath.Base(file)), 0666)
 }
