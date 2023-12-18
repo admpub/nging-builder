@@ -295,6 +295,20 @@ func (p buildParam) genLdFlagsString() string {
 	return s
 }
 
+func (p buildParam) genLdFlagsStringForStartup(version string) string {
+	ldflags := make([]string, 0, len(p.MinifyFlags)+len(p.LdFlags))
+	ldflags = append(ldflags, p.MinifyFlags...)
+	ldflags = append(ldflags, p.LdFlags...)
+	s := `-X main.BUILD_OS=` + p.goos
+	s += ` -X main.BUILD_ARCH=` + p.goarch
+	s += ` -X main.BUILD_TIME=` + p.NgingBuildTime
+	s += ` -X main.COMMIT=` + p.NgingCommitID
+	s += ` -X main.VERSION=` + version
+	s += ` -X main.MAIN_EXE=` + p.Executor
+	s += ` ` + strings.Join(ldflags, ` `)
+	return s
+}
+
 func (p buildParam) genEnvVars() []string {
 	env := []string{`GOOS=` + p.goos}
 	parts := strings.SplitN(p.goarch, `-`, 2)
@@ -374,6 +388,40 @@ func execBuildCommand(ctx context.Context, p buildParam) {
 	cmd.Stdout = os.Stdout
 	cmd.Env = env
 	err := cmd.Run()
+	if err != nil {
+		com.ExitOnFailure(err.Error(), 1)
+	}
+	if len(p.StartupPackage) > 0 {
+		execBuildCommandForStartup(ctx, p)
+	}
+}
+
+func execBuildCommandForStartup(ctx context.Context, p buildParam) {
+	parts := strings.SplitN(p.StartupPackage, `@`, 2)
+	var version string
+	if len(parts) == 2 {
+		version = parts[1]
+		version = strings.TrimPrefix(version, `v`)
+	}
+	if len(version) == 0 {
+		version = `0.0.1`
+	}
+	workDir, err := filepath.Abs(parts[0])
+	if err != nil {
+		com.ExitOnFailure(err.Error(), 1)
+	}
+	compiler := `go`
+	args := []string{`build`,
+		`-ldflags`, p.genLdFlagsStringForStartup(version),
+		`-o`, filepath.Join(p.ReleaseDir, `startup`+p.Extension),
+	}
+	cmd := exec.CommandContext(ctx, compiler, args...)
+	cmd.Dir = workDir
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	cmd.Env = os.Environ()
+	err = cmd.Run()
 	if err != nil {
 		com.ExitOnFailure(err.Error(), 1)
 	}
@@ -583,6 +631,7 @@ type Config struct {
 	NgingVersion   string
 	NgingLabel     string
 	NgingPackage   string
+	StartupPackage string
 	Project        string
 	VendorMiscDirs map[string][]string // key: GOOS
 	BuildTags      []string
@@ -606,6 +655,7 @@ func (a Config) apply() {
 		p.NgingLabel = a.NgingLabel
 	}
 	p.NgingPackage = a.NgingPackage
+	p.StartupPackage = a.StartupPackage
 	if len(a.Project) > 0 {
 		p.Project = a.Project
 	}
