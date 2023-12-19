@@ -128,7 +128,13 @@ func main() {
 	case 2:
 		minify = isMinified(args[1])
 		target = args[0]
-		addTarget(target)
+		for _, _target := range strings.Split(target, `,`) {
+			_target = strings.TrimSpace(_target)
+			if len(_target) == 0 {
+				continue
+			}
+			addTarget(_target)
+		}
 	case 1:
 		switch {
 		case isMinified(args[0]):
@@ -154,7 +160,14 @@ func main() {
 			fmt.Println(version)
 			return
 		default:
-			addTarget(args[0])
+			target = args[0]
+			for _, _target := range strings.Split(target, `,`) {
+				_target = strings.TrimSpace(_target)
+				if len(_target) == 0 {
+					continue
+				}
+				addTarget(_target)
+			}
 		}
 	case 0:
 		for _, t := range targetNames {
