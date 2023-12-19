@@ -304,7 +304,7 @@ func (p buildParam) genLdFlagsStringForStartup(version string) string {
 	s += ` -X main.BUILD_TIME=` + p.NgingBuildTime
 	s += ` -X main.COMMIT=` + p.NgingCommitID
 	s += ` -X main.VERSION=` + version
-	s += ` -X main.MAIN_EXE=` + p.Executor
+	s += ` -X main.MAIN_EXE=` + p.Executor + p.Extension
 	s += ` ` + strings.Join(ldflags, ` `)
 	return s
 }
