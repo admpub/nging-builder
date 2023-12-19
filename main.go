@@ -420,7 +420,8 @@ func execBuildCommandForStartup(ctx context.Context, p buildParam) {
 	cmd.Stdin = os.Stdin
 	cmd.Stderr = os.Stderr
 	cmd.Stdout = os.Stdout
-	cmd.Env = os.Environ()
+	cmd.Env = append(cmd.Env, os.Environ()...)
+	cmd.Env = append(cmd.Env, p.genEnvVars()...)
 	err = cmd.Run()
 	if err != nil {
 		com.ExitOnFailure(err.Error(), 1)
