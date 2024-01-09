@@ -183,6 +183,20 @@ func main() {
 	}
 	fmt.Println(`ConfFile	:	`, configFile)
 	fmt.Println(`WorkDir		:	`, p.WorkDir)
+	var distPath string
+	if len(outputDir) > 0 {
+		distPath, err = filepath.Abs(outputDir)
+		if err != nil {
+		        com.ExitOnFailure(err.Error(), 1)
+	        }
+	} else {
+		distPath = filepath.Join(p.ProjectPath, `dist`)
+	}
+	err = com.MkdirAll(distPath, os.ModePerm)
+	if err != nil {
+		com.ExitOnFailure(err.Error(), 1)
+	}
+	fmt.Println(`DistPath	:	`, distPath)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	err = os.Chdir(p.ProjectPath)
@@ -194,17 +208,6 @@ func main() {
 	if minify {
 		p.MinifyFlags = []string{`-s`, `-w`}
 	}
-	var distPath string
-	if len(outputDir) > 0 {
-		distPath = outputDir
-	} else {
-		distPath = filepath.Join(p.ProjectPath, `dist`)
-	}
-	err = com.MkdirAll(distPath, os.ModePerm)
-	if err != nil {
-		com.ExitOnFailure(err.Error(), 1)
-	}
-	fmt.Println(`DistPath	:	`, distPath)
 	allTargets := append(targets, armTargets...)
 	if len(target) > 0 && len(allTargets) == 0 {
 		com.ExitOnFailure(`Error		:	 Unsupported target ` + fmt.Sprintf(`%q`, target) + "\n")
