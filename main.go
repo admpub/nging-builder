@@ -24,7 +24,7 @@ import (
 
 var p = buildParam{}
 
-const version = `v0.2.2`
+const version = `v0.3.0`
 
 var c = Config{
 	GoVersion:    `1.21.4`,
@@ -75,11 +75,13 @@ var armRegexp = regexp.MustCompile(`/arm`)
 var configFile = `./builder.conf`
 var showVersion bool
 var noMisc bool
+var outputDir string
 
 func main() {
 	flag.StringVar(&configFile, `conf`, configFile, `--conf `+configFile)
 	flag.BoolVar(&noMisc, `nomisc`, noMisc, `--nomisc true`)
 	flag.BoolVar(&showVersion, `version`, false, `--version`)
+	flag.StringVar(&outputDir, `outputDir`, outputDir, `--outputDir ./dist`)
 	defaultUsage := flag.Usage
 	flag.Usage = func() {
 		defaultUsage()
@@ -192,7 +194,12 @@ func main() {
 	if minify {
 		p.MinifyFlags = []string{`-s`, `-w`}
 	}
-	distPath := filepath.Join(p.ProjectPath, `dist`)
+	var distPath string
+	if len(outputDir) > 0 {
+		distPath = outputDir
+	} else {
+		distPath = filepath.Join(p.ProjectPath, `dist`)
+	}
 	err = com.MkdirAll(distPath, os.ModePerm)
 	if err != nil {
 		com.ExitOnFailure(err.Error(), 1)
