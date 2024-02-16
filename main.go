@@ -69,6 +69,7 @@ var targetNames = map[string]string{
 	`darwin_arm64`:  `darwin/arm64`,
 	`windows_386`:   `windows/386`,
 	`windows_amd64`: `windows/amd64`,
+	`freebsd_amd64`: `freebsd/amd64`,
 }
 
 var armRegexp = regexp.MustCompile(`/arm`)
@@ -653,6 +654,7 @@ type Config struct {
 	MakeDirs       []string
 	Compiler       string
 	CgoEnabled     bool
+	Targets        map[string]string
 }
 
 func (a Config) apply() {
@@ -675,6 +677,11 @@ func (a Config) apply() {
 	}
 	if len(a.VendorMiscDirs) > 0 {
 		p.VendorMiscDirs = a.VendorMiscDirs
+	}
+	if len(a.Targets) > 0 {
+		for k, v := range a.Targets {
+			targetNames[k] = v
+		}
 	}
 	p.GoImage = a.GoImage
 	p.BuildTags = a.BuildTags
