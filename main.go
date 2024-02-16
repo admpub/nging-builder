@@ -69,7 +69,7 @@ var targetNames = map[string]string{
 	`darwin_arm64`:  `darwin/arm64`,
 	`windows_386`:   `windows/386`,
 	`windows_amd64`: `windows/amd64`,
-	`freebsd_amd64`: `freebsd/amd64`,
+	//`freebsd_amd64`: `freebsd/amd64`, // xgo 不支持
 }
 
 var armRegexp = regexp.MustCompile(`/arm`)
