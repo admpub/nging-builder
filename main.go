@@ -24,7 +24,7 @@ import (
 
 var p = buildParam{}
 
-const version = `v0.3.0`
+const version = `v0.3.1`
 
 var c = Config{
 	GoVersion:    `1.21.4`,
@@ -188,8 +188,8 @@ func main() {
 	if len(outputDir) > 0 {
 		distPath, err = filepath.Abs(outputDir)
 		if err != nil {
-		        com.ExitOnFailure(err.Error(), 1)
-	        }
+			com.ExitOnFailure(err.Error(), 1)
+		}
 	} else {
 		distPath = filepath.Join(p.ProjectPath, `dist`)
 	}
