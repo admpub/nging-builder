@@ -24,7 +24,7 @@ import (
 
 var p = buildParam{}
 
-const version = `v0.2.2`
+const version = `v0.3.0`
 
 var c = Config{
 	GoVersion:    `1.21.4`,
@@ -76,11 +76,13 @@ var armRegexp = regexp.MustCompile(`/arm`)
 var configFile = `./builder.conf`
 var showVersion bool
 var noMisc bool
+var outputDir string
 
 func main() {
 	flag.StringVar(&configFile, `conf`, configFile, `--conf `+configFile)
 	flag.BoolVar(&noMisc, `nomisc`, noMisc, `--nomisc true`)
 	flag.BoolVar(&showVersion, `version`, false, `--version`)
+	flag.StringVar(&outputDir, `outputDir`, outputDir, `--outputDir ./dist`)
 	defaultUsage := flag.Usage
 	flag.Usage = func() {
 		defaultUsage()
@@ -182,6 +184,20 @@ func main() {
 	}
 	fmt.Println(`ConfFile	:	`, configFile)
 	fmt.Println(`WorkDir		:	`, p.WorkDir)
+	var distPath string
+	if len(outputDir) > 0 {
+		distPath, err = filepath.Abs(outputDir)
+		if err != nil {
+		        com.ExitOnFailure(err.Error(), 1)
+	        }
+	} else {
+		distPath = filepath.Join(p.ProjectPath, `dist`)
+	}
+	err = com.MkdirAll(distPath, os.ModePerm)
+	if err != nil {
+		com.ExitOnFailure(err.Error(), 1)
+	}
+	fmt.Println(`DistPath	:	`, distPath)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	err = os.Chdir(p.ProjectPath)
@@ -193,12 +209,6 @@ func main() {
 	if minify {
 		p.MinifyFlags = []string{`-s`, `-w`}
 	}
-	distPath := filepath.Join(p.ProjectPath, `dist`)
-	err = com.MkdirAll(distPath, os.ModePerm)
-	if err != nil {
-		com.ExitOnFailure(err.Error(), 1)
-	}
-	fmt.Println(`DistPath	:	`, distPath)
 	allTargets := append(targets, armTargets...)
 	if len(target) > 0 && len(allTargets) == 0 {
 		com.ExitOnFailure(`Error		:	 Unsupported target ` + fmt.Sprintf(`%q`, target) + "\n")
