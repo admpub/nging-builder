@@ -24,7 +24,7 @@ import (
 
 var p = buildParam{}
 
-const version = `v0.3.1`
+const version = `v0.3.2`
 
 var c = Config{
 	GoVersion:    `1.21.4`,
