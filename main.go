@@ -24,12 +24,12 @@ import (
 
 var p = buildParam{}
 
-const version = `v0.3.2`
+const version = `v0.3.3`
 
 var c = Config{
-	GoVersion:    `1.21.4`,
+	GoVersion:    `1.21.6`,
 	Executor:     `nging`,
-	NgingVersion: `5.2.3`,
+	NgingVersion: `5.2.6`,
 	NgingLabel:   `stable`,
 	Project:      `github.com/admpub/nging`,
 	VendorMiscDirs: map[string][]string{
@@ -71,6 +71,11 @@ var targetNames = map[string]string{
 	`windows_amd64`: `windows/amd64`,
 	//`freebsd_amd64`: `freebsd/amd64`, // xgo 不支持
 }
+
+var (
+	xgoSupportedPlatforms    = []string{`darwin`, `linux`, `windows`}
+	xgoSupportedAchitectures = []string{`386`, `amd64`, `arm-5`, `arm-6`, `arm-7`, `arm64`, `mips`, `mipsle`, `mips64`, `mips64le`}
+)
 
 var armRegexp = regexp.MustCompile(`/arm`)
 var configFile = `./builder.conf`
@@ -236,6 +241,15 @@ func main() {
 		}
 		pCopy.goos = osName
 		pCopy.goarch = archName
+
+		// xgo 不支持的时候，采用纯 go 版 sqlite
+		if pCopy.Compiler == `xgo` && (!com.InSlice(osName, xgoSupportedPlatforms) || !com.InSlice(archName, xgoSupportedAchitectures)) {
+			pCopy.Compiler = `go`
+			if com.InSlice(`sqlite`, pCopy.BuildTags) {
+				pCopy.PureGoTags = append(pCopy.PureGoTags, `sqlitego`)
+			}
+		}
+
 		if osName != `darwin` {
 			pCopy.LdFlags = []string{`-extldflags`, `'-static'`}
 		}
