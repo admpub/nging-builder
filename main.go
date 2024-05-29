@@ -561,7 +561,8 @@ func packFiles(p buildParam, packedDir string) {
 			com.ExitOnFailure(err.Error(), 1)
 		}
 	}
-	err = com.TarGz(p.ReleaseDir, filepath.Join(packedDir, filepath.Base(p.ReleaseDir))+`.tar.gz`)
+	compressedFile := filepath.Join(packedDir, filepath.Base(p.ReleaseDir)) + `.tar.gz`
+	err = com.TarGz(p.ReleaseDir, compressedFile)
 	if err != nil {
 		com.ExitOnFailure(err.Error(), 1)
 	}
@@ -571,7 +572,7 @@ func packFiles(p buildParam, packedDir string) {
 	}
 	// 解压: tar -zxvf nging_linux_amd64.tar.gz -C ./nging_linux_amd64
 
-	err = makeChecksum(p.ReleaseDir + `.tar.gz`)
+	err = makeChecksum(compressedFile)
 	if err != nil {
 		com.ExitOnFailure(err.Error(), 1)
 	}
