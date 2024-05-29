@@ -218,6 +218,13 @@ func main() {
 	if len(target) > 0 && len(allTargets) == 0 {
 		com.ExitOnFailure(`Error		:	 Unsupported target ` + fmt.Sprintf(`%q`, target) + "\n")
 	}
+
+	packedDir := filepath.Join(distPath, `packed`, `v`+p.NgingVersion)
+	err = com.MkdirAll(packedDir, os.ModePerm)
+	if err != nil {
+		com.ExitOnFailure(err.Error(), 1)
+	}
+
 	fmt.Printf("Building %s for %+v\n", p.Executor, allTargets)
 	singleFileMode := isSingleFile()
 	for _, target := range allTargets {
@@ -262,7 +269,7 @@ func main() {
 		execBuildCommand(ctx, pCopy)
 		normalizeExecuteFileName(pCopy, singleFileMode)
 		if !singleFileMode {
-			packFiles(pCopy)
+			packFiles(pCopy, packedDir)
 		}
 	}
 }
@@ -514,7 +521,7 @@ func normalizeExecuteFileName(p buildParam, singleFileMode bool) {
 	}
 }
 
-func packFiles(p buildParam) {
+func packFiles(p buildParam, packedDir string) {
 	var files []string
 	var err error
 	for _, copyFile := range p.CopyFiles {
@@ -554,7 +561,7 @@ func packFiles(p buildParam) {
 			com.ExitOnFailure(err.Error(), 1)
 		}
 	}
-	err = com.TarGz(p.ReleaseDir, p.ReleaseDir+`.tar.gz`)
+	err = com.TarGz(p.ReleaseDir, filepath.Join(packedDir, filepath.Base(p.ReleaseDir))+`.tar.gz`)
 	if err != nil {
 		com.ExitOnFailure(err.Error(), 1)
 	}
