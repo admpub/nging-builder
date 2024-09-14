@@ -52,10 +52,11 @@ var c = Config{
 		},
 		`!linux`: {},
 	},
-	BuildTags: []string{`bindata`, `sqlite`},
-	CopyFiles: []string{`config/ua.txt`, `config/config.yaml.sample`, `data/ip2region`, `config/preupgrade.*`},
-	MakeDirs:  []string{`public/upload`, `config/vhosts`, `data/logs`},
-	Compiler:  `xgo`,
+	BuildTags:     []string{`bindata`, `sqlite`},
+	CopyFiles:     []string{`config/ua.txt`, `config/config.yaml.sample`, `data/ip2region`, `config/preupgrade.*`},
+	MakeDirs:      []string{`public/upload`, `config/vhosts`, `data/logs`},
+	BindataIgnore: []string{`[\\/]combined([\\/].*)?$`},
+	Compiler:      `xgo`,
 }
 
 var targetNames = map[string]string{
@@ -162,7 +163,7 @@ func main() {
 			com.ExitOnSuccess(`successully generate config file: ` + configFile)
 			return
 		case args[0] == `makeGen`:
-			makeGenerateCommandComment(c)
+			makeGenerateCommandComment()
 			return
 		case args[0] == `version`:
 			fmt.Println(version)
@@ -185,7 +186,7 @@ func main() {
 		com.ExitOnFailure(`invalid parameter`)
 	}
 	if !noMisc {
-		makeGenerateCommandComment(c)
+		makeGenerateCommandComment()
 	}
 	fmt.Println(`ConfFile	:	`, configFile)
 	fmt.Println(`WorkDir		:	`, p.WorkDir)
@@ -319,6 +320,7 @@ type buildParam struct {
 	LdFlags        []string
 	ProjectPath    string
 	WorkDir        string
+	BindataIgnore  []string
 	goos           string
 	goarch         string
 }
@@ -578,9 +580,13 @@ func packFiles(p buildParam, packedDir string) {
 	}
 }
 
-func genComment(vendorMiscDirs ...string) string {
+func genComment(bindataIgnore []string, vendorMiscDirs ...string) string {
 	comment := "//go:generate go install github.com/admpub/bindata/v3/go-bindata@latest\n"
-	comment += `//go:generate go-bindata -fs -o bindata_assetfs.go -ignore "\\.(git|svn|DS_Store|less|scss|gitkeep)$" -minify "\\.(js|css)$" -tags bindata`
+	comment += `//go:generate go-bindata -fs -o bindata_assetfs.go`
+	for _, v := range bindataIgnore {
+		comment += fmt.Sprintf(" -ignore %q", v)
+	}
+	comment += ` -ignore "\\.(git|svn|DS_Store|less|scss|gitkeep)$" -minify "\\.(js|css)$" -tags bindata`
 	miscDirs := []string{`public/assets/`, `template/`, `config/i18n/`}
 	miscDirs = append(miscDirs, vendorMiscDirs...)
 	var prefixes []string
@@ -632,7 +638,7 @@ func buildGoGenerateCommandData(miscDirs []string) (prefixes []string, miscDirsN
 	return
 }
 
-func makeGenerateCommandComment(c Config) {
+func makeGenerateCommandComment() {
 	dfts := p.VendorMiscDirs[`*`]
 	for osName, miscDirs := range p.VendorMiscDirs {
 		if osName == `*` {
@@ -651,7 +657,7 @@ func makeGenerateCommandComment(c Config) {
 		filePath := filepath.Join(p.ProjectPath, fileName)
 		fileContent := "//go:build " + osName + "\n\n"
 		fileContent += "package main\n\n"
-		fileContent += genComment(dirs...) + "\n\n"
+		fileContent += genComment(p.BindataIgnore, dirs...) + "\n\n"
 		fmt.Println(`[go:generate]	:	`, filePath)
 		b, err := os.ReadFile(filePath)
 		if err == nil {
@@ -687,6 +693,7 @@ type Config struct {
 	Compiler       string
 	CgoEnabled     bool
 	Targets        map[string]string
+	BindataIgnore  []string
 }
 
 func (a Config) apply() {
@@ -714,6 +721,9 @@ func (a Config) apply() {
 		for k, v := range a.Targets {
 			targetNames[k] = v
 		}
+	}
+	if len(a.BindataIgnore) > 0 {
+		p.BindataIgnore = a.BindataIgnore
 	}
 	p.GoImage = a.GoImage
 	p.BuildTags = a.BuildTags
