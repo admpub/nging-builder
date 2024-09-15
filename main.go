@@ -24,7 +24,7 @@ import (
 
 var p = buildParam{}
 
-const version = `v0.3.7`
+const version = `v0.3.8`
 
 var c = Config{
 	GoVersion:    `1.21.6`,
@@ -222,7 +222,6 @@ func main() {
 
 	if len(p.NgingVersion) == 0 {
 		p.NgingVersion = execGitCommitVersionCommand(ctx)
-		p.NgingVersion = strings.TrimSpace(p.NgingVersion)
 	}
 
 	packedDir := filepath.Join(distPath, `packed`, `v`+p.NgingVersion)
@@ -511,7 +510,7 @@ func execGitCommitVersionCommand(ctx context.Context) string {
 	if err != nil {
 		com.ExitOnFailure(err.Error(), 1)
 	}
-	return string(out)
+	return strings.TrimPrefix(strings.TrimSpace(string(out)), `v`)
 }
 
 func normalizeExecuteFileName(p buildParam, singleFileMode bool) {
