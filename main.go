@@ -220,6 +220,11 @@ func main() {
 		com.ExitOnFailure(`Error		:	 Unsupported target ` + fmt.Sprintf(`%q`, target) + "\n")
 	}
 
+	if len(p.NgingVersion) == 0 {
+		p.NgingVersion = execGitCommitVersionCommand(ctx)
+		p.NgingVersion = strings.TrimSpace(p.NgingVersion)
+	}
+
 	packedDir := filepath.Join(distPath, `packed`, `v`+p.NgingVersion)
 	err = com.MkdirAll(packedDir, os.ModePerm)
 	if err != nil {
@@ -490,7 +495,17 @@ func execGenerateCommand(ctx context.Context, p buildParam) {
 }
 
 func execGitCommitIDCommand(ctx context.Context) string {
-	cmd := exec.CommandContext(ctx, `git`, `rev-parse`, `HEAD`)
+	cmd := exec.CommandContext(ctx, `git`, `rev-parse`, `--short`, `HEAD`)
+	cmd.Dir = p.ProjectPath
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		com.ExitOnFailure(err.Error(), 1)
+	}
+	return string(out)
+}
+
+func execGitCommitVersionCommand(ctx context.Context) string {
+	cmd := exec.CommandContext(ctx, `git`, `describe`, `--always`, `--dirty`)
 	cmd.Dir = p.ProjectPath
 	out, err := cmd.CombinedOutput()
 	if err != nil {
