@@ -454,7 +454,20 @@ func genComment(vendorMiscDirs ...string) string {
 	comment := "//go:generate go install github.com/admpub/bindata/v3/go-bindata@latest\n"
 	comment += `//go:generate go-bindata -fs -o bindata_assetfs.go -ignore "\\.(git|svn|DS_Store|less|scss|gitkeep)$" -minify "\\.(js|css)$" -tags bindata`
 	prefixes := []string{}
-	miscDirs := []string{`public/assets/`, `template/`, `config/i18n/`}
+	var fixedPrefix string
+	exists := com.IsDir(fixedPrefix + `template/`)
+	for i := 0; i < 2 && !exists; i++ {
+		fixedPrefix += `../`
+		exists = com.IsDir(fixedPrefix + `template/`)
+	}
+	if !exists {
+		fixedPrefix = ``
+	}
+	miscDirs := []string{
+		fixedPrefix + `public/assets/`,
+		fixedPrefix + `template/`,
+		fixedPrefix + `config/i18n/`,
+	}
 	miscDirs = append(miscDirs, vendorMiscDirs...)
 	uniquePrefixes := map[string]struct{}{}
 	for k, v := range miscDirs {
@@ -470,9 +483,10 @@ func genComment(vendorMiscDirs ...string) string {
 				prefix := strings.Join(parts[0:4], `/`) + `/`
 				if _, ok := uniquePrefixes[prefix]; !ok {
 					uniquePrefixes[prefix] = struct{}{}
-					prefixes = append(prefixes, prefix)
+					prefixes = append(prefixes, fixedPrefix+prefix)
 				}
 			}
+			v = fixedPrefix + v
 		}
 		miscDirs[k] = v
 	}
