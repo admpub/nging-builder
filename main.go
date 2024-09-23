@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,18 +24,19 @@ import (
 
 var p = buildParam{}
 
-const version = `v0.0.3`
+const version = `v0.3.8`
 
 var c = Config{
-	GoVersion:    `1.20.6`,
+	GoVersion:    `1.21.6`,
 	Executor:     `nging`,
-	NgingVersion: `5.1.1`,
+	NgingVersion: `5.2.6`,
 	NgingLabel:   `stable`,
 	Project:      `github.com/admpub/nging`,
 	VendorMiscDirs: map[string][]string{
 		`*`: {
 			`vendor/github.com/nging-plugins/caddymanager/template/`,
 			`vendor/github.com/nging-plugins/collector/template/`,
+			`vendor/github.com/nging-plugins/collector/public/assets/`,
 			`vendor/github.com/nging-plugins/dbmanager/template/`,
 			`vendor/github.com/nging-plugins/dbmanager/public/assets/`,
 			`vendor/github.com/nging-plugins/ddnsmanager/template/`,
@@ -48,10 +52,11 @@ var c = Config{
 		},
 		`!linux`: {},
 	},
-	BuildTags: []string{`bindata`, `sqlite`},
-	CopyFiles: []string{`config/ua.txt`, `config/config.yaml.sample`, `data/ip2region`, `config/preupgrade.*`},
-	MakeDirs:  []string{`public/upload`, `config/vhosts`, `data/logs`},
-	Compiler:  `xgo`,
+	BuildTags:     []string{`bindata`, `sqlite`},
+	CopyFiles:     []string{`config/ua.txt`, `config/config.yaml.sample`, `data/ip2region`, `config/preupgrade.*`},
+	MakeDirs:      []string{`public/upload`, `config/vhosts`, `data/logs`},
+	BindataIgnore: []string{`[\\/]combined([\\/].*)?$`},
+	Compiler:      `xgo`,
 }
 
 var targetNames = map[string]string{
@@ -65,15 +70,25 @@ var targetNames = map[string]string{
 	`darwin_arm64`:  `darwin/arm64`,
 	`windows_386`:   `windows/386`,
 	`windows_amd64`: `windows/amd64`,
+	//`freebsd_amd64`: `freebsd/amd64`, // xgo 不支持
 }
+
+var (
+	xgoSupportedPlatforms    = []string{`darwin`, `linux`, `windows`}
+	xgoSupportedAchitectures = []string{`386`, `amd64`, `arm-5`, `arm-6`, `arm-7`, `arm64`, `mips`, `mipsle`, `mips64`, `mips64le`}
+)
 
 var armRegexp = regexp.MustCompile(`/arm`)
 var configFile = `./builder.conf`
 var showVersion bool
+var noMisc bool
+var outputDir string
 
 func main() {
 	flag.StringVar(&configFile, `conf`, configFile, `--conf `+configFile)
+	flag.BoolVar(&noMisc, `nomisc`, noMisc, `--nomisc true`)
 	flag.BoolVar(&showVersion, `version`, false, `--version`)
+	flag.StringVar(&outputDir, `outputDir`, outputDir, `--outputDir ./dist`)
 	defaultUsage := flag.Usage
 	flag.Usage = func() {
 		defaultUsage()
@@ -122,7 +137,13 @@ func main() {
 	case 2:
 		minify = isMinified(args[1])
 		target = args[0]
-		addTarget(target)
+		for _, _target := range strings.Split(target, `,`) {
+			_target = strings.TrimSpace(_target)
+			if len(_target) == 0 {
+				continue
+			}
+			addTarget(_target)
+		}
 	case 1:
 		switch {
 		case isMinified(args[0]):
@@ -142,13 +163,20 @@ func main() {
 			com.ExitOnSuccess(`successully generate config file: ` + configFile)
 			return
 		case args[0] == `makeGen`:
-			makeGenerateCommandComment(c)
+			makeGenerateCommandComment()
 			return
 		case args[0] == `version`:
 			fmt.Println(version)
 			return
 		default:
-			addTarget(args[0])
+			target = args[0]
+			for _, _target := range strings.Split(target, `,`) {
+				_target = strings.TrimSpace(_target)
+				if len(_target) == 0 {
+					continue
+				}
+				addTarget(_target)
+			}
 		}
 	case 0:
 		for _, t := range targetNames {
@@ -157,8 +185,25 @@ func main() {
 	default:
 		com.ExitOnFailure(`invalid parameter`)
 	}
+	if !noMisc {
+		makeGenerateCommandComment()
+	}
 	fmt.Println(`ConfFile	:	`, configFile)
 	fmt.Println(`WorkDir		:	`, p.WorkDir)
+	var distPath string
+	if len(outputDir) > 0 {
+		distPath, err = filepath.Abs(outputDir)
+		if err != nil {
+			com.ExitOnFailure(err.Error(), 1)
+		}
+	} else {
+		distPath = filepath.Join(p.ProjectPath, `dist`)
+	}
+	err = com.MkdirAll(distPath, os.ModePerm)
+	if err != nil {
+		com.ExitOnFailure(err.Error(), 1)
+	}
+	fmt.Println(`DistPath	:	`, distPath)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	err = os.Chdir(p.ProjectPath)
@@ -170,16 +215,21 @@ func main() {
 	if minify {
 		p.MinifyFlags = []string{`-s`, `-w`}
 	}
-	distPath := filepath.Join(p.ProjectPath, `dist`)
-	err = com.MkdirAll(distPath, os.ModePerm)
-	if err != nil {
-		com.ExitOnFailure(err.Error(), 1)
-	}
-	fmt.Println(`DistPath	:	`, distPath)
 	allTargets := append(targets, armTargets...)
 	if len(target) > 0 && len(allTargets) == 0 {
 		com.ExitOnFailure(`Error		:	 Unsupported target ` + fmt.Sprintf(`%q`, target) + "\n")
 	}
+
+	if len(p.NgingVersion) == 0 {
+		p.NgingVersion = execGitCommitVersionCommand(ctx)
+	}
+
+	packedDir := filepath.Join(distPath, `packed`, `v`+p.NgingVersion)
+	err = com.MkdirAll(packedDir, os.ModePerm)
+	if err != nil {
+		com.ExitOnFailure(err.Error(), 1)
+	}
+
 	fmt.Printf("Building %s for %+v\n", p.Executor, allTargets)
 	singleFileMode := isSingleFile()
 	for _, target := range allTargets {
@@ -203,6 +253,15 @@ func main() {
 		}
 		pCopy.goos = osName
 		pCopy.goarch = archName
+
+		// xgo 不支持的时候，采用纯 go 版 sqlite
+		if pCopy.Compiler == `xgo` && (!com.InSlice(osName, xgoSupportedPlatforms) || !com.InSlice(archName, xgoSupportedAchitectures)) {
+			pCopy.Compiler = `go`
+			if com.InSlice(`sqlite`, pCopy.BuildTags) {
+				pCopy.PureGoTags = append(pCopy.PureGoTags, `sqlitego`)
+			}
+		}
+
 		if osName != `darwin` {
 			pCopy.LdFlags = []string{`-extldflags`, `'-static'`}
 		}
@@ -215,7 +274,7 @@ func main() {
 		execBuildCommand(ctx, pCopy)
 		normalizeExecuteFileName(pCopy, singleFileMode)
 		if !singleFileMode {
-			packFiles(pCopy)
+			packFiles(pCopy, packedDir)
 		}
 	}
 }
@@ -265,15 +324,40 @@ type buildParam struct {
 	LdFlags        []string
 	ProjectPath    string
 	WorkDir        string
+	BindataIgnore  []string
 	goos           string
 	goarch         string
 }
 
 func (p buildParam) genLdFlagsString() string {
-	ldflags := []string{}
+	ldflags := make([]string, 0, len(p.MinifyFlags)+len(p.LdFlags))
 	ldflags = append(ldflags, p.MinifyFlags...)
 	ldflags = append(ldflags, p.LdFlags...)
-	return `-X main.BUILD_TIME=` + p.NgingBuildTime + ` -X main.COMMIT=` + p.NgingCommitID + ` -X main.VERSION=` + p.NgingVersion + ` -X main.LABEL=` + p.NgingLabel + ` -X main.BUILD_OS=` + p.goos + ` -X main.BUILD_ARCH=` + p.goarch + ` ` + strings.Join(ldflags, ` `)
+	s := `-X main.BUILD_OS=` + p.goos
+	s += ` -X main.BUILD_ARCH=` + p.goarch
+	s += ` -X main.BUILD_TIME=` + p.NgingBuildTime
+	s += ` -X main.COMMIT=` + p.NgingCommitID
+	s += ` -X main.VERSION=` + p.NgingVersion
+	s += ` -X main.LABEL=` + p.NgingLabel
+	if len(p.NgingPackage) > 0 {
+		s += ` -X main.PACKAGE=` + p.NgingPackage
+	}
+	s += ` ` + strings.Join(ldflags, ` `)
+	return s
+}
+
+func (p buildParam) genLdFlagsStringForStartup(version string) string {
+	ldflags := make([]string, 0, len(p.MinifyFlags)+len(p.LdFlags))
+	ldflags = append(ldflags, p.MinifyFlags...)
+	ldflags = append(ldflags, p.LdFlags...)
+	s := `-X main.BUILD_OS=` + p.goos
+	s += ` -X main.BUILD_ARCH=` + p.goarch
+	s += ` -X main.BUILD_TIME=` + p.NgingBuildTime
+	s += ` -X main.COMMIT=` + p.NgingCommitID
+	s += ` -X main.VERSION=` + version
+	s += ` -X main.MAIN_EXE=` + p.Executor + p.Extension
+	s += ` ` + strings.Join(ldflags, ` `)
+	return s
 }
 
 func (p buildParam) genEnvVars() []string {
@@ -322,7 +406,7 @@ func execBuildCommand(ctx context.Context, p buildParam) {
 		compiler = `xgo`
 		image := p.GoImage
 		if len(image) == 0 {
-			image = `localhost/crazymax/xgo:` + p.GoVersion
+			image = `admpub/xgo:` + p.GoVersion
 		} else {
 			checkStr := image
 			pos := strings.LastIndex(image, `/`)
@@ -333,9 +417,12 @@ func execBuildCommand(ctx context.Context, p buildParam) {
 				image += `:` + p.GoVersion
 			}
 		}
+		if len(p.GoProxy) == 0 {
+			p.GoProxy = `https://goproxy.cn,direct`
+		}
 		args = []string{
 			`-go`, p.GoVersion,
-			`-goproxy`, `https://goproxy.cn,direct`,
+			`-goproxy`, p.GoProxy,
 			`-image`, image,
 			`-targets`, p.Target,
 			`-dest`, p.ReleaseDir,
@@ -352,6 +439,41 @@ func execBuildCommand(ctx context.Context, p buildParam) {
 	cmd.Stdout = os.Stdout
 	cmd.Env = env
 	err := cmd.Run()
+	if err != nil {
+		com.ExitOnFailure(err.Error(), 1)
+	}
+	if len(p.StartupPackage) > 0 {
+		execBuildCommandForStartup(ctx, p)
+	}
+}
+
+func execBuildCommandForStartup(ctx context.Context, p buildParam) {
+	parts := strings.SplitN(p.StartupPackage, `@`, 2)
+	var version string
+	if len(parts) == 2 {
+		version = parts[1]
+		version = strings.TrimPrefix(version, `v`)
+	}
+	if len(version) == 0 {
+		version = `0.0.1`
+	}
+	workDir, err := filepath.Abs(parts[0])
+	if err != nil {
+		com.ExitOnFailure(err.Error(), 1)
+	}
+	compiler := `go`
+	args := []string{`build`,
+		`-ldflags`, p.genLdFlagsStringForStartup(version),
+		`-o`, filepath.Join(p.ReleaseDir, `startup`+p.Extension),
+	}
+	cmd := exec.CommandContext(ctx, compiler, args...)
+	cmd.Dir = workDir
+	cmd.Stdin = os.Stdin
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	cmd.Env = append(cmd.Env, os.Environ()...)
+	cmd.Env = append(cmd.Env, p.genEnvVars()...)
+	err = cmd.Run()
 	if err != nil {
 		com.ExitOnFailure(err.Error(), 1)
 	}
@@ -372,7 +494,7 @@ func execGenerateCommand(ctx context.Context, p buildParam) {
 }
 
 func execGitCommitIDCommand(ctx context.Context) string {
-	cmd := exec.CommandContext(ctx, `git`, `rev-parse`, `HEAD`)
+	cmd := exec.CommandContext(ctx, `git`, `rev-parse`, `--short`, `HEAD`)
 	cmd.Dir = p.ProjectPath
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -381,12 +503,26 @@ func execGitCommitIDCommand(ctx context.Context) string {
 	return string(out)
 }
 
+func execGitCommitVersionCommand(ctx context.Context) string {
+	cmd := exec.CommandContext(ctx, `git`, `describe`, `--always`, `--dirty`)
+	cmd.Dir = p.ProjectPath
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		com.ExitOnFailure(err.Error(), 1)
+	}
+	return strings.TrimPrefix(strings.TrimSpace(string(out)), `v`)
+}
+
 func normalizeExecuteFileName(p buildParam, singleFileMode bool) {
 	if singleFileMode {
+		name := p.Executor + `-` + p.goos + `-` + p.goarch
+		finalName := filepath.Join(p.ReleaseDir, name)
 		if len(p.Extension) > 0 {
-			name := p.Executor + `-` + p.goos + `-` + p.goarch
-			com.Rename(filepath.Join(p.ReleaseDir, name), filepath.Join(p.ReleaseDir, name+p.Extension))
+			original := finalName
+			finalName += p.Extension
+			com.Rename(original, finalName)
 		}
+		makeChecksum(finalName)
 		return
 	}
 	files, err := filepath.Glob(filepath.Join(p.ReleaseDir, p.Executor+`-`+p.goos+`*`))
@@ -394,12 +530,14 @@ func normalizeExecuteFileName(p buildParam, singleFileMode bool) {
 		com.ExitOnFailure(err.Error(), 1)
 	}
 	for _, file := range files {
-		com.Rename(file, filepath.Join(p.ReleaseDir, p.Executor+p.Extension))
+		finalName := filepath.Join(p.ReleaseDir, p.Executor+p.Extension)
+		com.Rename(file, finalName)
+		makeChecksum(finalName)
 		break
 	}
 }
 
-func packFiles(p buildParam) {
+func packFiles(p buildParam, packedDir string) {
 	var files []string
 	var err error
 	for _, copyFile := range p.CopyFiles {
@@ -439,7 +577,8 @@ func packFiles(p buildParam) {
 			com.ExitOnFailure(err.Error(), 1)
 		}
 	}
-	err = com.TarGz(p.ReleaseDir, p.ReleaseDir+`.tar.gz`)
+	compressedFile := filepath.Join(packedDir, filepath.Base(p.ReleaseDir)) + `.tar.gz`
+	err = com.TarGz(p.ReleaseDir, compressedFile)
 	if err != nil {
 		com.ExitOnFailure(err.Error(), 1)
 	}
@@ -448,12 +587,20 @@ func packFiles(p buildParam) {
 		com.ExitOnFailure(err.Error(), 1)
 	}
 	// 解压: tar -zxvf nging_linux_amd64.tar.gz -C ./nging_linux_amd64
+
+	err = makeChecksum(compressedFile)
+	if err != nil {
+		com.ExitOnFailure(err.Error(), 1)
+	}
 }
 
-func genComment(vendorMiscDirs ...string) string {
+func genComment(bindataIgnore []string, vendorMiscDirs ...string) string {
 	comment := "//go:generate go install github.com/admpub/bindata/v3/go-bindata@latest\n"
-	comment += `//go:generate go-bindata -fs -o bindata_assetfs.go -ignore "\\.(git|svn|DS_Store|less|scss|gitkeep)$" -minify "\\.(js|css)$" -tags bindata`
-	prefixes := []string{}
+	comment += `//go:generate go-bindata -fs -o bindata_assetfs.go`
+	for _, v := range bindataIgnore {
+		comment += fmt.Sprintf(" -ignore %q", v)
+	}
+	comment += ` -ignore "\\.(git|svn|DS_Store|less|scss|gitkeep)$" -minify "\\.(js|css)$" -tags bindata`
 	var fixedPrefix string
 	exists := com.IsDir(fixedPrefix + `template/`)
 	for i := 0; i < 2 && !exists; i++ {
@@ -469,6 +616,14 @@ func genComment(vendorMiscDirs ...string) string {
 		fixedPrefix + `config/i18n/`,
 	}
 	miscDirs = append(miscDirs, vendorMiscDirs...)
+	var prefixes []string
+	prefixes, miscDirs = buildGoGenerateCommandData(fixedPrefix, miscDirs)
+	comment += ` -prefix "` + strings.Join(prefixes, `|`) + `" `
+	comment += strings.Join(miscDirs, ` `)
+	return comment
+}
+
+func buildGoGenerateCommandData(fixedPrefix string, miscDirs []string) (prefixes []string, miscDirsNew []string) {
 	uniquePrefixes := map[string]struct{}{}
 	for k, v := range miscDirs {
 		if !strings.HasSuffix(v, `/...`) {
@@ -479,7 +634,7 @@ func genComment(vendorMiscDirs ...string) string {
 		}
 		if strings.HasPrefix(v, `vendor/`) {
 			parts := strings.SplitN(v, `/`, 5)
-			if len(parts) == 5 {
+			if len(parts) == 5 { // `vendor/github.com/nging-plugins/collector/template/`  `vendor/github.com/nging-plugins/collector/public/`
 				prefix := strings.Join(parts[0:4], `/`) + `/`
 				if _, ok := uniquePrefixes[prefix]; !ok {
 					uniquePrefixes[prefix] = struct{}{}
@@ -487,15 +642,31 @@ func genComment(vendorMiscDirs ...string) string {
 				}
 			}
 			v = fixedPrefix + v
+		} else if pos := strings.Index(v, `../`); pos > -1 && len(v) > 3 {
+			cleaned := v[pos+3:]
+			totalPos := 3
+			pos = strings.Index(cleaned, `../`)
+			for pos > -1 && len(cleaned) > 3 {
+				totalPos += 3
+				cleaned = cleaned[pos+3:]
+				pos = strings.Index(cleaned, `../`)
+			}
+			parts := strings.SplitN(cleaned, `/`, 4)
+			if len(parts) == 4 { // `github.com/nging-plugins/collector/template/`  `github.com/nging-plugins/collector/public/`
+				prefix := v[0:totalPos] + strings.Join(parts[0:3], `/`) + `/`
+				if _, ok := uniquePrefixes[prefix]; !ok {
+					uniquePrefixes[prefix] = struct{}{}
+					prefixes = append(prefixes, prefix)
+				}
+			}
 		}
 		miscDirs[k] = v
 	}
-	comment += ` -prefix "` + strings.Join(prefixes, `|`) + `" `
-	comment += strings.Join(miscDirs, ` `)
-	return comment
+	miscDirsNew = miscDirs
+	return
 }
 
-func makeGenerateCommandComment(c Config) {
+func makeGenerateCommandComment() {
 	dfts := p.VendorMiscDirs[`*`]
 	for osName, miscDirs := range p.VendorMiscDirs {
 		if osName == `*` {
@@ -514,7 +685,8 @@ func makeGenerateCommandComment(c Config) {
 		filePath := filepath.Join(p.ProjectPath, fileName)
 		fileContent := "//go:build " + osName + "\n\n"
 		fileContent += "package main\n\n"
-		fileContent += genComment(dirs...) + "\n\n"
+		fileContent += genComment(p.BindataIgnore, dirs...) + "\n\n"
+		fmt.Println(`[go:generate]	:	`, filePath)
 		b, err := os.ReadFile(filePath)
 		if err == nil {
 			old := string(b)
@@ -522,6 +694,8 @@ func makeGenerateCommandComment(c Config) {
 			if pos > -1 {
 				fileContent += old[pos:]
 			}
+		} else {
+			fmt.Println(err)
 		}
 		err = os.WriteFile(filePath, []byte(fileContent), os.ModePerm)
 		if err != nil {
@@ -533,9 +707,12 @@ func makeGenerateCommandComment(c Config) {
 type Config struct {
 	GoVersion      string
 	GoImage        string
+	GoProxy        string
 	Executor       string
 	NgingVersion   string
 	NgingLabel     string
+	NgingPackage   string
+	StartupPackage string
 	Project        string
 	VendorMiscDirs map[string][]string // key: GOOS
 	BuildTags      []string
@@ -543,6 +720,8 @@ type Config struct {
 	MakeDirs       []string
 	Compiler       string
 	CgoEnabled     bool
+	Targets        map[string]string
+	BindataIgnore  []string
 }
 
 func (a Config) apply() {
@@ -558,12 +737,45 @@ func (a Config) apply() {
 	if len(a.NgingLabel) > 0 {
 		p.NgingLabel = a.NgingLabel
 	}
+	p.NgingPackage = a.NgingPackage
+	p.StartupPackage = a.StartupPackage
 	if len(a.Project) > 0 {
 		p.Project = a.Project
 	}
+	if len(a.VendorMiscDirs) > 0 {
+		p.VendorMiscDirs = a.VendorMiscDirs
+	}
+	if len(a.Targets) > 0 {
+		for k, v := range a.Targets {
+			targetNames[k] = v
+		}
+	}
+	if len(a.BindataIgnore) > 0 {
+		p.BindataIgnore = a.BindataIgnore
+	}
+	p.GoImage = a.GoImage
 	p.BuildTags = a.BuildTags
 	p.CopyFiles = a.CopyFiles
 	p.MakeDirs = a.MakeDirs
 	p.Compiler = a.Compiler
 	p.CgoEnabled = a.CgoEnabled
+	p.GoProxy = a.GoProxy
+}
+
+func makeChecksum(file string) error {
+	f, err := os.OpenFile(file, os.O_RDONLY, 0666)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	copyBuf := make([]byte, 1024*1024)
+
+	h := sha256.New()
+	_, err = io.CopyBuffer(h, f, copyBuf)
+	if err != nil {
+		return err
+	}
+
+	sha256Result := hex.EncodeToString(h.Sum(nil))
+	return os.WriteFile(file+`.sha256`, []byte(sha256Result+` `+filepath.Base(file)), 0666)
 }
