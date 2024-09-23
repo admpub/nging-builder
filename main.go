@@ -601,29 +601,21 @@ func genComment(bindataIgnore []string, vendorMiscDirs ...string) string {
 		comment += fmt.Sprintf(" -ignore %q", v)
 	}
 	comment += ` -ignore "\\.(git|svn|DS_Store|less|scss|gitkeep)$" -minify "\\.(js|css)$" -tags bindata`
-	var fixedPrefix string
-	exists := com.IsDir(fixedPrefix + `template/`)
-	for i := 0; i < 2 && !exists; i++ {
-		fixedPrefix += `../`
-		exists = com.IsDir(fixedPrefix + `template/`)
-	}
-	if !exists {
-		fixedPrefix = ``
-	}
+
 	miscDirs := []string{
-		fixedPrefix + `public/assets/`,
-		fixedPrefix + `template/`,
-		fixedPrefix + `config/i18n/`,
+		`public/assets/`,
+		`template/`,
+		`config/i18n/`,
 	}
 	miscDirs = append(miscDirs, vendorMiscDirs...)
 	var prefixes []string
-	prefixes, miscDirs = buildGoGenerateCommandData(fixedPrefix, miscDirs)
+	prefixes, miscDirs = buildGoGenerateCommandData(miscDirs)
 	comment += ` -prefix "` + strings.Join(prefixes, `|`) + `" `
 	comment += strings.Join(miscDirs, ` `)
 	return comment
 }
 
-func buildGoGenerateCommandData(fixedPrefix string, miscDirs []string) (prefixes []string, miscDirsNew []string) {
+func buildGoGenerateCommandData(miscDirs []string) (prefixes []string, miscDirsNew []string) {
 	uniquePrefixes := map[string]struct{}{}
 	for k, v := range miscDirs {
 		if !strings.HasSuffix(v, `/...`) {
@@ -638,10 +630,9 @@ func buildGoGenerateCommandData(fixedPrefix string, miscDirs []string) (prefixes
 				prefix := strings.Join(parts[0:4], `/`) + `/`
 				if _, ok := uniquePrefixes[prefix]; !ok {
 					uniquePrefixes[prefix] = struct{}{}
-					prefixes = append(prefixes, fixedPrefix+prefix)
+					prefixes = append(prefixes, prefix)
 				}
 			}
-			v = fixedPrefix + v
 		} else if pos := strings.Index(v, `../`); pos > -1 && len(v) > 3 {
 			cleaned := v[pos+3:]
 			totalPos := 3
