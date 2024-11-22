@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -257,13 +258,11 @@ func main() {
 		// xgo 不支持的时候，采用纯 go 版 sqlite
 		if pCopy.Compiler == `xgo` && (!com.InSlice(osName, xgoSupportedPlatforms) || !com.InSlice(archName, xgoSupportedAchitectures)) {
 			pCopy.Compiler = `go`
-			if com.InSlice(`sqlite`, pCopy.BuildTags) {
-				pCopy.PureGoTags = append(pCopy.PureGoTags, `sqlitego`)
+			if com.InSlice(`sqlitecgo`, pCopy.BuildTags) {
+				pCopy.BuildTags = slices.DeleteFunc(pCopy.BuildTags, func(v string) bool {
+					return v == `sqlitecgo`
+				})
 			}
-		}
-		sqliteDriverPureGo := com.InSlice(`session-sqlitego`, pCopy.BuildTags) || com.InSlice(`cache-sqlitego`, pCopy.BuildTags)
-		if sqliteDriverPureGo && com.InSlice(`sqlite`, pCopy.BuildTags) && !com.InSlice(`sqlitego`, pCopy.PureGoTags) {
-			pCopy.PureGoTags = append(pCopy.PureGoTags, `sqlitego`)
 		}
 		if osName != `darwin` {
 			pCopy.LdFlags = []string{`-extldflags`, `'-static'`}
