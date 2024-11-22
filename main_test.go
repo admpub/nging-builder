@@ -11,7 +11,7 @@ import (
 func Test1(t *testing.T) {
 	miscDirs := []string{`../../../github.com/admpub/nging/template/...`}
 	var prefixes []string
-	prefixes, miscDirs = buildGoGenerateCommandData(miscDirs)
+	prefixes, miscDirs = buildGoGenerateCommandData(``, miscDirs)
 	b, _ := json.MarshalIndent(miscDirs, ``, `  `)
 	fmt.Println(string(b))
 	b, _ = json.MarshalIndent(prefixes, ``, `  `)
