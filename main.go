@@ -261,7 +261,10 @@ func main() {
 				pCopy.PureGoTags = append(pCopy.PureGoTags, `sqlitego`)
 			}
 		}
-
+		sqliteDriverPureGo := com.InSlice(`session-sqlitego`, pCopy.BuildTags) || com.InSlice(`cache-sqlitego`, pCopy.BuildTags)
+		if sqliteDriverPureGo && com.InSlice(`sqlite`, pCopy.BuildTags) && !com.InSlice(`sqlitego`, pCopy.PureGoTags) {
+			pCopy.PureGoTags = append(pCopy.PureGoTags, `sqlitego`)
+		}
 		if osName != `darwin` {
 			pCopy.LdFlags = []string{`-extldflags`, `'-static'`}
 		}
