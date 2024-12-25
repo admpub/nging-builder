@@ -238,9 +238,11 @@ func main() {
 		if len(parts) != 2 {
 			continue
 		}
-		pCopy := p
+		pCopy := p.Clone()
 		pCopy.Target = target
-		pCopy.PureGoTags = []string{`osusergo`}
+		if !com.InSlice(`osusergo`, pCopy.PureGoTags) {
+			pCopy.PureGoTags = append(pCopy.PureGoTags, `osusergo`)
+		}
 		osName := parts[0]
 		archName := parts[1]
 		if singleFileMode {
@@ -268,7 +270,9 @@ func main() {
 			pCopy.LdFlags = []string{`-extldflags`, `'-static'`}
 		}
 		if osName != `windows` {
-			pCopy.PureGoTags = append(pCopy.PureGoTags, `netgo`)
+			if !com.InSlice(`netgo`, pCopy.PureGoTags) {
+				pCopy.PureGoTags = append(pCopy.PureGoTags, `netgo`)
+			}
 		} else {
 			pCopy.Extension = `.exe`
 		}
@@ -329,6 +333,30 @@ type buildParam struct {
 	BindataIgnore  []string
 	goos           string
 	goarch         string
+}
+
+func (p buildParam) Clone() buildParam {
+	c := buildParam{
+		Config:         p.Config.Clone(),
+		Target:         p.Target,
+		ReleaseDir:     p.ReleaseDir,
+		Extension:      p.Extension,
+		PureGoTags:     make([]string, len(p.PureGoTags)),
+		NgingBuildTime: p.NgingBuildTime,
+		NgingCommitID:  p.NgingCommitID,
+		MinifyFlags:    make([]string, len(p.MinifyFlags)),
+		LdFlags:        make([]string, len(p.LdFlags)),
+		ProjectPath:    p.ProjectPath,
+		WorkDir:        p.WorkDir,
+		BindataIgnore:  make([]string, len(p.BindataIgnore)),
+		goos:           p.goos,
+		goarch:         p.goarch,
+	}
+	copy(c.PureGoTags, p.PureGoTags)
+	copy(c.MinifyFlags, p.MinifyFlags)
+	copy(c.LdFlags, p.LdFlags)
+	copy(c.BindataIgnore, p.BindataIgnore)
+	return c
 }
 
 func (p buildParam) genLdFlagsString() string {
@@ -714,6 +742,40 @@ type Config struct {
 	CgoEnabled     bool
 	Targets        map[string]string
 	BindataIgnore  []string
+}
+
+func (a Config) Clone() Config {
+	p := Config{
+		GoVersion:      a.GoVersion,
+		GoImage:        a.GoImage,
+		GoProxy:        a.GoProxy,
+		Executor:       a.Executor,
+		NgingVersion:   a.NgingVersion,
+		NgingLabel:     a.NgingLabel,
+		NgingPackage:   a.NgingPackage,
+		StartupPackage: a.StartupPackage,
+		Project:        a.Project,
+		VendorMiscDirs: map[string][]string{}, // key: GOOS
+		BuildTags:      make([]string, len(a.BuildTags)),
+		CopyFiles:      make([]string, len(a.CopyFiles)),
+		MakeDirs:       make([]string, len(a.MakeDirs)),
+		Compiler:       a.Compiler,
+		CgoEnabled:     a.CgoEnabled,
+		Targets:        map[string]string{},
+		BindataIgnore:  make([]string, len(a.BindataIgnore)),
+	}
+	copy(p.BuildTags, a.BuildTags)
+	copy(p.CopyFiles, a.CopyFiles)
+	copy(p.MakeDirs, a.MakeDirs)
+	copy(p.BindataIgnore, a.BindataIgnore)
+	for k, v := range a.VendorMiscDirs {
+		p.VendorMiscDirs[k] = make([]string, len(v))
+		copy(p.VendorMiscDirs[k], v)
+	}
+	for k, v := range a.Targets {
+		p.Targets[k] = v
+	}
+	return a
 }
 
 func (a Config) apply() {
