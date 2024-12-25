@@ -53,7 +53,7 @@ var c = Config{
 		},
 		`!linux`: {},
 	},
-	BuildTags:     []string{`bindata`, `sqlite`},
+	BuildTags:     []string{`bindata`, `db_sqlite`, `sqlitecgo`},
 	CopyFiles:     []string{`config/ua.txt`, `config/config.yaml.sample`, `data/ip2region`, `config/preupgrade.*`},
 	MakeDirs:      []string{`public/upload`, `config/vhosts`, `data/logs`},
 	BindataIgnore: []string{`[\\/]combined([\\/].*)?$`},
@@ -267,7 +267,12 @@ func main() {
 			}
 		}
 		if osName != `darwin` {
-			pCopy.LdFlags = []string{`-extldflags`, `'-static'`}
+			if !com.InSlice(`-extldflags`, pCopy.LdFlags) {
+				pCopy.LdFlags = append(pCopy.LdFlags, `-extldflags`)
+			}
+			if !com.InSlice(`'-static'`, pCopy.LdFlags) {
+				pCopy.LdFlags = append(pCopy.LdFlags, `'-static'`)
+			}
 		}
 		if osName != `windows` {
 			if !com.InSlice(`netgo`, pCopy.PureGoTags) {
@@ -405,7 +410,7 @@ func (p buildParam) genEnvVars() []string {
 }
 
 func execBuildCommand(ctx context.Context, p buildParam) {
-	tags := []string{}
+	tags := make([]string, 0, len(p.PureGoTags)+len(p.BuildTags))
 	tags = append(tags, p.PureGoTags...)
 	tags = append(tags, p.BuildTags...)
 	var args []string
@@ -745,7 +750,7 @@ type Config struct {
 }
 
 func (a Config) Clone() Config {
-	p := Config{
+	c := Config{
 		GoVersion:      a.GoVersion,
 		GoImage:        a.GoImage,
 		GoProxy:        a.GoProxy,
@@ -764,18 +769,18 @@ func (a Config) Clone() Config {
 		Targets:        map[string]string{},
 		BindataIgnore:  make([]string, len(a.BindataIgnore)),
 	}
-	copy(p.BuildTags, a.BuildTags)
-	copy(p.CopyFiles, a.CopyFiles)
-	copy(p.MakeDirs, a.MakeDirs)
-	copy(p.BindataIgnore, a.BindataIgnore)
+	copy(c.BuildTags, a.BuildTags)
+	copy(c.CopyFiles, a.CopyFiles)
+	copy(c.MakeDirs, a.MakeDirs)
+	copy(c.BindataIgnore, a.BindataIgnore)
 	for k, v := range a.VendorMiscDirs {
-		p.VendorMiscDirs[k] = make([]string, len(v))
-		copy(p.VendorMiscDirs[k], v)
+		c.VendorMiscDirs[k] = make([]string, len(v))
+		copy(c.VendorMiscDirs[k], v)
 	}
 	for k, v := range a.Targets {
-		p.Targets[k] = v
+		c.Targets[k] = v
 	}
-	return a
+	return c
 }
 
 func (a Config) apply() {
