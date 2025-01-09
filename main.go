@@ -635,7 +635,7 @@ func genComment(bindataIgnore []string, vendorMiscDirs ...string) string {
 	for _, v := range bindataIgnore {
 		comment += fmt.Sprintf(" -ignore %q", v)
 	}
-	comment += ` -ignore "\\.(git|svn|DS_Store|less|scss|gitkeep)$" -minify "\\.(js|css)$" -tags bindata`
+	comment += ` -ignore "\\.(git|svn|DS_Store|less|scss|gitkeep|go)$" -minify "\\.(js|css)$" -tags bindata`
 	miscDirs := []string{
 		`public/assets/`,
 		`template/`,
