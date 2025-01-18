@@ -34,3 +34,15 @@ func Test2(t *testing.T) {
 	assert.Equal(t, []string{`bindata`, `db_sqlite`, `sqlitecgo`}, p.BuildTags)
 	assert.Equal(t, []string{`bindata`, `db_sqlite`}, pc.BuildTags)
 }
+
+func Test3(t *testing.T) {
+	miscDirs := []string{
+		`public/assets/`,
+		`template/`,
+		`config/i18n/`,
+		`../../abc/public/assets/`,
+	}
+	for _, dir := range miscDirs {
+		assert.True(t, templateAndPublicMisc.MatchString(dir))
+	}
+}

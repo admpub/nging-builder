@@ -36,6 +36,7 @@ var c = Config{
 	VendorMiscDirs: map[string][]string{
 		`*`: {
 			`vendor/github.com/nging-plugins/caddymanager/template/`,
+			`vendor/github.com/nging-plugins/caddymanager/public/assets/`,
 			`vendor/github.com/nging-plugins/collector/template/`,
 			`vendor/github.com/nging-plugins/collector/public/assets/`,
 			`vendor/github.com/nging-plugins/dbmanager/template/`,
@@ -649,15 +650,34 @@ func genComment(bindataIgnore []string, vendorMiscDirs ...string) string {
 	return comment
 }
 
+var templateAndPublicMisc = regexp.MustCompile(`(/|^)(template|public/assets|config/i18n)(/|/[.]{3})?$`)
+
 func buildGoGenerateCommandData(miscDirs []string) (prefixes []string, miscDirsNew []string) {
 	uniquePrefixes := map[string]struct{}{}
-	for k, v := range miscDirs {
-		if !strings.HasSuffix(v, `/...`) {
-			if !strings.HasSuffix(v, `/`) {
-				v += `/`
-			}
-			v += `...`
+	autoDiscovery := func(dir string) bool {
+		if !p.AutoDiscoveryMiscDir || templateAndPublicMisc.MatchString(dir) {
+			return false
 		}
+		dirNew := templateAndPublicMisc.ReplaceAllString(dir, ``)
+		tmplDir := filepath.Join(dirNew, `template`)
+		var isMod bool
+		if com.IsDir(tmplDir) {
+			miscDirsNew = append(miscDirsNew, tmplDir+`/...`)
+			isMod = true
+		}
+		pubDir := filepath.Join(dirNew, `public/assets`)
+		if com.IsDir(pubDir) {
+			miscDirsNew = append(miscDirsNew, pubDir+`/...`)
+			isMod = true
+		}
+		i18nDir := filepath.Join(dirNew, `config/i18n`)
+		if com.IsDir(i18nDir) {
+			miscDirsNew = append(miscDirsNew, i18nDir+`/...`)
+			isMod = true
+		}
+		return isMod
+	}
+	for _, v := range miscDirs {
 		if strings.HasPrefix(v, `vendor/`) {
 			parts := strings.SplitN(v, `/`, 5)
 			if len(parts) == 5 { // `vendor/github.com/nging-plugins/collector/template/`  `vendor/github.com/nging-plugins/collector/public/`
@@ -685,9 +705,16 @@ func buildGoGenerateCommandData(miscDirs []string) (prefixes []string, miscDirsN
 				}
 			}
 		}
-		miscDirs[k] = v
+		if !autoDiscovery(v) {
+			if !strings.HasSuffix(v, `/...`) {
+				if !strings.HasSuffix(v, `/`) {
+					v += `/`
+				}
+				v += `...`
+			}
+			miscDirsNew = append(miscDirsNew, v)
+		}
 	}
-	miscDirsNew = miscDirs
 	return
 }
 
@@ -730,44 +757,46 @@ func makeGenerateCommandComment() {
 }
 
 type Config struct {
-	GoVersion      string
-	GoImage        string
-	GoProxy        string
-	Executor       string
-	NgingVersion   string
-	NgingLabel     string
-	NgingPackage   string
-	StartupPackage string
-	Project        string
-	VendorMiscDirs map[string][]string // key: GOOS
-	BuildTags      []string
-	CopyFiles      []string
-	MakeDirs       []string
-	Compiler       string
-	CgoEnabled     bool
-	Targets        map[string]string
-	BindataIgnore  []string
+	GoVersion            string
+	GoImage              string
+	GoProxy              string
+	Executor             string
+	NgingVersion         string
+	NgingLabel           string
+	NgingPackage         string
+	StartupPackage       string
+	Project              string
+	VendorMiscDirs       map[string][]string // key: GOOS
+	AutoDiscoveryMiscDir bool
+	BuildTags            []string
+	CopyFiles            []string
+	MakeDirs             []string
+	Compiler             string
+	CgoEnabled           bool
+	Targets              map[string]string
+	BindataIgnore        []string
 }
 
 func (a Config) Clone() Config {
 	c := Config{
-		GoVersion:      a.GoVersion,
-		GoImage:        a.GoImage,
-		GoProxy:        a.GoProxy,
-		Executor:       a.Executor,
-		NgingVersion:   a.NgingVersion,
-		NgingLabel:     a.NgingLabel,
-		NgingPackage:   a.NgingPackage,
-		StartupPackage: a.StartupPackage,
-		Project:        a.Project,
-		VendorMiscDirs: map[string][]string{}, // key: GOOS
-		BuildTags:      make([]string, len(a.BuildTags)),
-		CopyFiles:      make([]string, len(a.CopyFiles)),
-		MakeDirs:       make([]string, len(a.MakeDirs)),
-		Compiler:       a.Compiler,
-		CgoEnabled:     a.CgoEnabled,
-		Targets:        map[string]string{},
-		BindataIgnore:  make([]string, len(a.BindataIgnore)),
+		GoVersion:            a.GoVersion,
+		GoImage:              a.GoImage,
+		GoProxy:              a.GoProxy,
+		Executor:             a.Executor,
+		NgingVersion:         a.NgingVersion,
+		NgingLabel:           a.NgingLabel,
+		NgingPackage:         a.NgingPackage,
+		StartupPackage:       a.StartupPackage,
+		Project:              a.Project,
+		VendorMiscDirs:       map[string][]string{}, // key: GOOS
+		AutoDiscoveryMiscDir: a.AutoDiscoveryMiscDir,
+		BuildTags:            make([]string, len(a.BuildTags)),
+		CopyFiles:            make([]string, len(a.CopyFiles)),
+		MakeDirs:             make([]string, len(a.MakeDirs)),
+		Compiler:             a.Compiler,
+		CgoEnabled:           a.CgoEnabled,
+		Targets:              map[string]string{},
+		BindataIgnore:        make([]string, len(a.BindataIgnore)),
 	}
 	copy(c.BuildTags, a.BuildTags)
 	copy(c.CopyFiles, a.CopyFiles)
@@ -804,6 +833,7 @@ func (a Config) apply() {
 	if len(a.VendorMiscDirs) > 0 {
 		p.VendorMiscDirs = a.VendorMiscDirs
 	}
+	p.AutoDiscoveryMiscDir = a.AutoDiscoveryMiscDir
 	if len(a.Targets) > 0 {
 		for k, v := range a.Targets {
 			targetNames[k] = v
