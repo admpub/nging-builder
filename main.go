@@ -25,10 +25,10 @@ import (
 
 var p = buildParam{}
 
-const version = `v0.5.3`
+const version = `v0.5.5`
 
 var c = Config{
-	GoVersion:    `1.21.6`,
+	GoVersion:    `1.23.5`,
 	Executor:     `nging`,
 	NgingVersion: `5.2.6`,
 	NgingLabel:   `stable`,
