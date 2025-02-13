@@ -615,7 +615,15 @@ func packFiles(p buildParam, packedDir string) {
 		}
 	}
 	compressedFile := filepath.Join(packedDir, filepath.Base(p.ReleaseDir)) + `.tar.gz`
-	err = com.TarGzWithLevel(gzip.BestCompression, p.ReleaseDir, compressedFile)
+	if p.CompressLevel > 0 {
+		compressLevel := p.CompressLevel
+		if compressLevel > gzip.BestCompression {
+			compressLevel = gzip.BestCompression
+		}
+		err = com.TarGzWithLevel(compressLevel, p.ReleaseDir, compressedFile)
+	} else {
+		err = com.TarGz(p.ReleaseDir, compressedFile)
+	}
 	if err != nil {
 		com.ExitOnFailure(err.Error(), 1)
 	}
@@ -776,6 +784,7 @@ type Config struct {
 	CgoEnabled           bool
 	Targets              map[string]string
 	BindataIgnore        []string
+	CompressLevel        int
 }
 
 func (a Config) Clone() Config {
@@ -798,6 +807,7 @@ func (a Config) Clone() Config {
 		CgoEnabled:           a.CgoEnabled,
 		Targets:              map[string]string{},
 		BindataIgnore:        make([]string, len(a.BindataIgnore)),
+		CompressLevel:        a.CompressLevel,
 	}
 	copy(c.BuildTags, a.BuildTags)
 	copy(c.CopyFiles, a.CopyFiles)
@@ -850,6 +860,7 @@ func (a Config) apply() {
 	p.Compiler = a.Compiler
 	p.CgoEnabled = a.CgoEnabled
 	p.GoProxy = a.GoProxy
+	p.CompressLevel = a.CompressLevel
 }
 
 func makeChecksum(file string) error {
