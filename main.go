@@ -1,6 +1,7 @@
 package main
 
 import (
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -614,7 +615,7 @@ func packFiles(p buildParam, packedDir string) {
 		}
 	}
 	compressedFile := filepath.Join(packedDir, filepath.Base(p.ReleaseDir)) + `.tar.gz`
-	err = com.TarGz(p.ReleaseDir, compressedFile)
+	err = com.TarGzWithLevel(gzip.BestCompression, p.ReleaseDir, compressedFile)
 	if err != nil {
 		com.ExitOnFailure(err.Error(), 1)
 	}
