@@ -86,12 +86,16 @@ var configFile = `./builder.conf`
 var showVersion bool
 var noMisc bool
 var outputDir string
+var releaseVersion string
+var goVersion string
 
 func main() {
 	flag.StringVar(&configFile, `conf`, configFile, `--conf `+configFile)
 	flag.BoolVar(&noMisc, `nomisc`, noMisc, `--nomisc true`)
 	flag.BoolVar(&showVersion, `version`, false, `--version`)
 	flag.StringVar(&outputDir, `outputDir`, outputDir, `--outputDir ./dist`)
+	flag.StringVar(&releaseVersion, `releaseVersion`, releaseVersion, `--releaseVersion 3.1.1`)
+	flag.StringVar(&goVersion, `goVersion`, goVersion, `--goVersion 1.24.4`)
 	defaultUsage := flag.Usage
 	flag.Usage = func() {
 		defaultUsage()
@@ -115,6 +119,18 @@ func main() {
 	p.ProjectPath, err = com.GetSrcPath(p.Project)
 	if err != nil && !isGenConfig {
 		com.ExitOnFailure(err.Error(), 1)
+	}
+	if len(releaseVersion) > 0 {
+		releaseVersion = strings.TrimPrefix(releaseVersion, `v`)
+		if len(releaseVersion) > 0 {
+			p.NgingVersion = releaseVersion
+		}
+	}
+	if len(goVersion) > 0 {
+		goVersion = strings.TrimPrefix(goVersion, `v`)
+		if len(goVersion) > 0 {
+			p.GoVersion = goVersion
+		}
 	}
 	p.WorkDir = strings.TrimSuffix(strings.TrimSuffix(p.ProjectPath, `/`), p.Project)
 	var targets []string
