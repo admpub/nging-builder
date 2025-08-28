@@ -26,7 +26,7 @@ import (
 
 var p = buildParam{}
 
-const version = `v0.5.7`
+const version = `v0.6.0`
 
 var c = Config{
 	GoVersion:    `1.23.5`,
@@ -88,6 +88,7 @@ var noMisc bool
 var outputDir string
 var releaseVersion string
 var goVersion string
+var compiler string
 
 func main() {
 	flag.StringVar(&configFile, `conf`, configFile, `--conf `+configFile)
@@ -95,6 +96,7 @@ func main() {
 	flag.BoolVar(&showVersion, `version`, false, `--version`)
 	flag.StringVar(&outputDir, `outputDir`, outputDir, `--outputDir ./dist`)
 	flag.StringVar(&releaseVersion, `releaseVersion`, releaseVersion, `--releaseVersion 3.1.1`)
+	flag.StringVar(&compiler, `compiler`, compiler, `--compiler go or --compiler xgo`)
 	flag.StringVar(&goVersion, `goVersion`, goVersion, `--goVersion 1.24.4`)
 	defaultUsage := flag.Usage
 	flag.Usage = func() {
@@ -135,7 +137,19 @@ func main() {
 	p.WorkDir = strings.TrimSuffix(strings.TrimSuffix(p.ProjectPath, `/`), p.Project)
 	var targets []string
 	var armTargets []string
+	targetCompilers := map[string]string{}
 	addTarget := func(target string, notNames ...bool) {
+		parts := strings.SplitN(target, `:`, 2)
+		for k, v := range parts {
+			parts[k] = strings.TrimSpace(v)
+		}
+		var compiler string
+		if len(parts) == 2 {
+			target = parts[1]
+			compiler = parts[0]
+		} else {
+			target = parts[0]
+		}
 		if len(notNames) == 0 || !notNames[0] {
 			target = getTarget(target)
 			if len(target) == 0 {
@@ -146,6 +160,9 @@ func main() {
 			armTargets = append(armTargets, target)
 		} else {
 			targets = append(targets, target)
+		}
+		if len(compiler) > 0 {
+			targetCompilers[target] = compiler
 		}
 	}
 	args := make([]string, len(flag.Args()))
@@ -257,6 +274,13 @@ func main() {
 			continue
 		}
 		pCopy := p.Clone()
+		if len(compiler) > 0 {
+			pCopy.Compiler = compiler
+		} else if _compiler, _ok := targetCompilers[target]; _ok {
+			if len(_compiler) > 0 {
+				pCopy.Compiler = _compiler
+			}
+		}
 		pCopy.Target = target
 		if !com.InSlice(`osusergo`, pCopy.PureGoTags) {
 			pCopy.PureGoTags = append(pCopy.PureGoTags, `osusergo`)
