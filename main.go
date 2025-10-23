@@ -26,7 +26,7 @@ import (
 
 var p = buildParam{}
 
-const version = `v0.6.0`
+const version = `v0.6.1`
 
 var c = Config{
 	GoVersion:    `1.23.5`,
@@ -60,6 +60,8 @@ var c = Config{
 	MakeDirs:      []string{`public/upload`, `config/vhosts`, `data/logs`},
 	BindataIgnore: []string{`[\\/]combined([\\/].*)?$`},
 	Compiler:      `xgo`,
+	BindataLevel:  gzip.BestCompression,
+	CompressLevel: gzip.BestCompression,
 }
 
 var targetNames = map[string]string{
@@ -112,7 +114,10 @@ func main() {
 	}
 	isGenConfig := len(flag.Args()) == 1 && com.InSlice(`genConfig`, flag.Args())
 
-	configInFile := Config{}
+	configInFile := Config{
+		BindataLevel:  gzip.BestCompression,
+		CompressLevel: gzip.BestCompression,
+	}
 	_, err := confl.DecodeFile(configFile, &configInFile)
 	if err != nil && !isGenConfig {
 		com.ExitOnFailure(err.Error(), 1)
@@ -684,6 +689,9 @@ func packFiles(p buildParam, packedDir string) {
 func genComment(bindataIgnore []string, vendorMiscDirs ...string) string {
 	comment := "//go:generate go install github.com/admpub/bindata/v3/go-bindata@latest\n"
 	comment += `//go:generate go-bindata -fs -o bindata_assetfs.go`
+	if p.BindataLevel > 0 && gzip.BestCompression >= p.BindataLevel {
+		comment += fmt.Sprintf(` -compresslevel %d`, p.BindataLevel)
+	}
 	for _, v := range bindataIgnore {
 		comment += fmt.Sprintf(" -ignore %q", v)
 	}
@@ -827,6 +835,7 @@ type Config struct {
 	Targets              map[string]string
 	BindataIgnore        []string
 	CompressLevel        int
+	BindataLevel         int
 }
 
 func (a Config) Clone() Config {
@@ -850,6 +859,7 @@ func (a Config) Clone() Config {
 		Targets:              map[string]string{},
 		BindataIgnore:        make([]string, len(a.BindataIgnore)),
 		CompressLevel:        a.CompressLevel,
+		BindataLevel:         a.BindataLevel,
 	}
 	copy(c.BuildTags, a.BuildTags)
 	copy(c.CopyFiles, a.CopyFiles)
@@ -903,6 +913,7 @@ func (a Config) apply() {
 	p.CgoEnabled = a.CgoEnabled
 	p.GoProxy = a.GoProxy
 	p.CompressLevel = a.CompressLevel
+	p.BindataLevel = a.BindataLevel
 }
 
 func makeChecksum(file string) error {
