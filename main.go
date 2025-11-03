@@ -26,7 +26,7 @@ import (
 
 var p = buildParam{}
 
-const version = `v0.6.1`
+const version = `v0.6.2`
 
 var c = Config{
 	GoVersion:    `1.23.5`,
@@ -91,6 +91,7 @@ var outputDir string
 var releaseVersion string
 var goVersion string
 var compiler string
+var combineChecksum bool = true
 
 func main() {
 	flag.StringVar(&configFile, `conf`, configFile, `--conf `+configFile)
@@ -100,6 +101,7 @@ func main() {
 	flag.StringVar(&releaseVersion, `releaseVersion`, releaseVersion, `--releaseVersion 3.1.1`)
 	flag.StringVar(&compiler, `compiler`, compiler, `--compiler go or --compiler xgo`)
 	flag.StringVar(&goVersion, `goVersion`, goVersion, `--goVersion 1.24.4`)
+	flag.BoolVar(&combineChecksum, `combineChecksum`, combineChecksum, `--combineChecksum true`)
 	defaultUsage := flag.Usage
 	flag.Usage = func() {
 		defaultUsage()
@@ -273,6 +275,7 @@ func main() {
 
 	fmt.Printf("Building %s for %+v\n", p.Executor, allTargets)
 	singleFileMode := isSingleFile()
+	var compressedFiles []string
 	for _, target := range allTargets {
 		parts := strings.SplitN(target, `/`, 2)
 		if len(parts) != 2 {
@@ -334,7 +337,14 @@ func main() {
 		execBuildCommand(ctx, pCopy)
 		normalizeExecuteFileName(pCopy, singleFileMode)
 		if !singleFileMode {
-			packFiles(pCopy, packedDir)
+			compressedFile := packFiles(pCopy, packedDir)
+			compressedFiles = append(compressedFiles, compressedFile)
+		}
+	}
+	if combineChecksum && len(compressedFiles) > 0 {
+		err = makeChecksums(compressedFiles, packedDir)
+		if err != nil {
+			com.ExitOnFailure(err.Error())
 		}
 	}
 }
@@ -621,7 +631,7 @@ func normalizeExecuteFileName(p buildParam, singleFileMode bool) {
 	}
 }
 
-func packFiles(p buildParam, packedDir string) {
+func packFiles(p buildParam, packedDir string) string {
 	var files []string
 	var err error
 	for _, copyFile := range p.CopyFiles {
@@ -680,10 +690,13 @@ func packFiles(p buildParam, packedDir string) {
 	}
 	// 解压: tar -zxvf nging_linux_amd64.tar.gz -C ./nging_linux_amd64
 
-	err = makeChecksum(compressedFile)
-	if err != nil {
-		com.ExitOnFailure(err.Error(), 1)
+	if !combineChecksum {
+		err = makeChecksum(compressedFile)
+		if err != nil {
+			com.ExitOnFailure(err.Error(), 1)
+		}
 	}
+	return compressedFile
 }
 
 func genComment(bindataIgnore []string, vendorMiscDirs ...string) string {
@@ -916,10 +929,10 @@ func (a Config) apply() {
 	p.BindataLevel = a.BindataLevel
 }
 
-func makeChecksum(file string) error {
+func sha256file(file string) (string, error) {
 	f, err := os.OpenFile(file, os.O_RDONLY, 0666)
 	if err != nil {
-		return err
+		return ``, err
 	}
 	defer f.Close()
 	copyBuf := make([]byte, 1024*1024)
@@ -927,9 +940,52 @@ func makeChecksum(file string) error {
 	h := sha256.New()
 	_, err = io.CopyBuffer(h, f, copyBuf)
 	if err != nil {
-		return err
+		return ``, err
 	}
 
 	sha256Result := hex.EncodeToString(h.Sum(nil))
+	return sha256Result, nil
+}
+
+func makeChecksum(file string) error {
+	sha256Result, err := sha256file(file)
+	if err != nil {
+		return err
+	}
 	return os.WriteFile(file+`.sha256`, []byte(sha256Result+` `+filepath.Base(file)), 0666)
+}
+
+var spaceRegexp = regexp.MustCompile(`\s+`)
+
+func makeChecksums(files []string, saveDir string) error {
+	saveFile := `checksums.txt`
+	if len(saveDir) > 0 {
+		os.MkdirAll(saveDir, os.ModePerm)
+		saveFile = filepath.Join(saveDir, saveFile)
+	}
+	checksums := map[string]string{}
+	b, err := os.ReadFile(saveFile)
+	if err == nil {
+		lines := strings.Split(string(b), "\n")
+		for _, line := range lines {
+			parts := spaceRegexp.Split(line, 2)
+			if len(parts) == 2 {
+				checksums[parts[1]] = parts[0]
+			}
+		}
+	}
+	lines := make([]string, len(files))
+	for index, file := range files {
+		sha256Result, err := sha256file(file)
+		if err != nil {
+			return err
+		}
+		fileName := filepath.Base(file)
+		lines[index] = sha256Result + ` ` + fileName
+		delete(checksums, fileName)
+	}
+	for fileName, sha256Result := range checksums {
+		lines = append(lines, sha256Result+` `+fileName)
+	}
+	return os.WriteFile(saveFile, []byte(strings.Join(lines, "\n")), 0666)
 }
