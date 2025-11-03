@@ -26,7 +26,7 @@ import (
 
 var p = buildParam{}
 
-const version = `v0.6.2`
+const version = `v0.6.3`
 
 var c = Config{
 	GoVersion:    `1.23.5`,
@@ -176,6 +176,8 @@ func main() {
 	copy(args, flag.Args())
 	var minify bool
 	var target string
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	switch len(args) {
 	case 2:
 		minify = isMinified(args[1])
@@ -205,8 +207,26 @@ func main() {
 			}
 			com.ExitOnSuccess(`successully generate config file: ` + configFile)
 			return
+		case args[0] == `genComment`:
+			fallthrough
 		case args[0] == `makeGen`:
 			makeGenerateCommandComment()
+			return
+		case args[0] == `genChecksums`:
+			_, packedDir := getDistPathAndPackedDir(ctx)
+			if len(packedDir) == 0 {
+				com.ExitOnFailure(`packedDir is empty`, 1)
+			}
+			var files []string
+			files, err = filepath.Glob(packedDir + string(filepath.Separator) + `*.tar.gz`)
+			if err != nil {
+				com.ExitOnFailure(err.Error(), 1)
+			}
+			err = makeChecksums(files, packedDir)
+			if err != nil {
+				com.ExitOnFailure(err.Error(), 1)
+			}
+			com.ExitOnSuccess(`successully generate checksums file: ` + packedDir + string(filepath.Separator) + `checksums.txt`)
 			return
 		case args[0] == `version`:
 			fmt.Println(version)
@@ -233,22 +253,8 @@ func main() {
 	}
 	fmt.Println(`ConfFile	:	`, configFile)
 	fmt.Println(`WorkDir		:	`, p.WorkDir)
-	var distPath string
-	if len(outputDir) > 0 {
-		distPath, err = filepath.Abs(outputDir)
-		if err != nil {
-			com.ExitOnFailure(err.Error(), 1)
-		}
-	} else {
-		distPath = filepath.Join(p.ProjectPath, `dist`)
-	}
-	err = com.MkdirAll(distPath, os.ModePerm)
-	if err != nil {
-		com.ExitOnFailure(err.Error(), 1)
-	}
-	fmt.Println(`DistPath	:	`, distPath)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	distPath, packedDir := getDistPathAndPackedDir(ctx)
+
 	err = os.Chdir(p.ProjectPath)
 	if err != nil {
 		com.ExitOnFailure(err.Error(), 1)
@@ -261,16 +267,6 @@ func main() {
 	allTargets := append(targets, armTargets...)
 	if len(target) > 0 && len(allTargets) == 0 {
 		com.ExitOnFailure(`Error		:	 Unsupported target ` + fmt.Sprintf(`%q`, target) + "\n")
-	}
-
-	if len(p.NgingVersion) == 0 {
-		p.NgingVersion = execGitCommitVersionCommand(ctx)
-	}
-
-	packedDir := filepath.Join(distPath, `packed`, `v`+p.NgingVersion)
-	err = com.MkdirAll(packedDir, os.ModePerm)
-	if err != nil {
-		com.ExitOnFailure(err.Error(), 1)
 	}
 
 	fmt.Printf("Building %s for %+v\n", p.Executor, allTargets)
@@ -347,6 +343,35 @@ func main() {
 			com.ExitOnFailure(err.Error())
 		}
 	}
+}
+
+func getDistPathAndPackedDir(ctx context.Context) (string, string) {
+	var distPath string
+	var err error
+	if len(outputDir) > 0 {
+		distPath, err = filepath.Abs(outputDir)
+		if err != nil {
+			com.ExitOnFailure(err.Error(), 1)
+		}
+	} else {
+		distPath = filepath.Join(p.ProjectPath, `dist`)
+	}
+	err = com.MkdirAll(distPath, os.ModePerm)
+	if err != nil {
+		com.ExitOnFailure(err.Error(), 1)
+	}
+	fmt.Println(`DistPath	:	`, distPath)
+
+	if len(p.NgingVersion) == 0 {
+		p.NgingVersion = execGitCommitVersionCommand(ctx)
+	}
+
+	packedDir := filepath.Join(distPath, `packed`, `v`+p.NgingVersion)
+	err = com.MkdirAll(packedDir, os.ModePerm)
+	if err != nil {
+		com.ExitOnFailure(err.Error(), 1)
+	}
+	return distPath, packedDir
 }
 
 func getTarget(target string) string {
