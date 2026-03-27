@@ -734,12 +734,13 @@ func genComment(bindataIgnore []string, vendorMiscDirs ...string) string {
 		comment += fmt.Sprintf(" -ignore %q", v)
 	}
 	comment += ` -ignore "\\.(git|svn|DS_Store|less|scss|gitkeep|go)$" -minify "\\.(js|css)$" -tags bindata`
-	miscDirs := []string{
+	miscDirs := []string{}
+	miscDirs = append(miscDirs, vendorMiscDirs...)
+	miscDirs = append(miscDirs,
 		`public/assets/`,
 		`template/`,
 		`config/i18n/`,
-	}
-	miscDirs = append(miscDirs, vendorMiscDirs...)
+	)
 	var prefixes []string
 	prefixes, miscDirs = buildGoGenerateCommandData(miscDirs)
 	comment += ` -prefix "` + strings.Join(prefixes, `|`) + `" `
