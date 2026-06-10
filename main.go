@@ -365,8 +365,12 @@ func getDistPathAndPackedDir(ctx context.Context) (string, string) {
 	if len(p.NgingVersion) == 0 {
 		p.NgingVersion = execGitCommitVersionCommand(ctx)
 	}
-
-	packedDir := filepath.Join(distPath, `packed`, `v`+p.NgingVersion)
+	var packedDir string
+	if len(p.NgingPackage) > 0 {
+		packedDir = filepath.Join(distPath, `packed`, p.NgingPackage, `v`+p.NgingVersion)
+	} else {
+		packedDir = filepath.Join(distPath, `packed`, `v`+p.NgingVersion)
+	}
 	err = com.MkdirAll(packedDir, os.ModePerm)
 	if err != nil {
 		com.ExitOnFailure(err.Error(), 1)
